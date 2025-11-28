@@ -1,0 +1,221 @@
+local player = game.Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local TS = game:GetService("TweenService")
+
+local char = player.Character or player.CharacterAdded:Wait()
+local hum = char:WaitForChild("Humanoid")
+
+local fly = false
+local invis = false
+local speed = 60
+local bg, bv
+
+-- Main GUI
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+gui.IgnoreGuiInset = true
+
+-- FADE IN
+gui.Enabled = false
+task.wait(0.2)
+gui.Enabled = true
+
+--------------------------------------------------------------------
+-- 🔵 FUNCTION Tween
+--------------------------------------------------------------------
+local function tween(obj, info, props)
+	return TS:Create(obj, TweenInfo.new(info[1], info[2], info[3]), props):Play()
+end
+
+--------------------------------------------------------------------
+-- 🔵 BUTTON CREATOR (Rounded + Glow + Hover)
+--------------------------------------------------------------------
+local function createRoundButton(parent, posUD, color, text)
+	local b = Instance.new("TextButton", parent)
+	b.Size = UDim2.new(0, 70, 0, 70)
+	b.Position = posUD
+	b.BackgroundColor3 = color
+	b.Text = text
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.TextScaled = true
+	b.Font = Enum.Font.GothamBlack
+	b.AutoButtonColor = false
+
+	Instance.new("UICorner", b).CornerRadius = UDim.new(1, 0)
+
+	-- Glow
+	local UIStroke = Instance.new("UIStroke", b)
+	UIStroke.Color = Color3.fromRGB(140, 0, 255)
+	UIStroke.Thickness = 2
+	UIStroke.Transparency = 0.3
+
+	-- Hover effect
+	b.MouseEnter:Connect(function()
+		tween(b, {0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {Size = UDim2.new(0, 76, 0, 76)})
+	end)
+	b.MouseLeave:Connect(function()
+		tween(b, {0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {Size = UDim2.new(0, 70, 0, 70)})
+	end)
+
+	return b
+end
+
+--------------------------------------------------------------------
+-- 🔵 BUTTON FLY + INVIS
+--------------------------------------------------------------------
+local FB = createRoundButton(gui, UDim2.new(0.8, 0, 0.45, 0), Color3.fromRGB(35, 35, 35), "✦")
+local IB = createRoundButton(gui, UDim2.new(0.8, 0, 0.55, 0), Color3.fromRGB(35, 35, 35), "👻")
+
+--------------------------------------------------------------------
+-- 🔵 SPEED PANEL (Modern)
+--------------------------------------------------------------------
+local P = Instance.new("Frame", gui)
+P.Size = UDim2.new(0, 240, 0, 140)
+P.Position = UDim2.new(0.63, 0, 0.62, 0)
+P.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Instance.new("UICorner", P).CornerRadius = UDim.new(0, 20)
+
+-- Stroke Glow
+local stroke = Instance.new("UIStroke", P)
+stroke.Color = Color3.fromRGB(150, 0, 255)
+stroke.Thickness = 2
+stroke.Transparency = 0.2
+
+-- Fade-in
+P.BackgroundTransparency = 1
+stroke.Transparency = 1
+tween(P, {0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {BackgroundTransparency = 0})
+tween(stroke, {0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {Transparency = 0.2})
+
+local PT = Instance.new("TextLabel", P)
+PT.Size = UDim2.new(1, 0, 0.25, 0)
+PT.BackgroundTransparency = 1
+PT.Text = "Speed"
+PT.TextColor3 = Color3.fromRGB(200, 200, 255)
+PT.Font = Enum.Font.GothamBold
+PT.TextScaled = true
+
+-- SLIDER track
+local SB = Instance.new("Frame", P)
+SB.Size = UDim2.new(0.85, 0, 0.2, 0)
+SB.Position = UDim2.new(0.075, 0, 0.45, 0)
+SB.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+Instance.new("UICorner", SB).CornerRadius = UDim.new(0, 10)
+
+-- SLIDER button (glossy)
+local SBtn = Instance.new("Frame", SB)
+SBtn.Size = UDim2.new(0.1, 0, 1.3, 0)
+SBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
+Instance.new("UICorner", SBtn).CornerRadius = UDim.new(0, 8)
+
+local glow = Instance.new("UIStroke", SBtn)
+glow.Color = Color3.fromRGB(255, 0, 255)
+glow.Thickness = 2
+glow.Transparency = 0.2
+
+local SL = Instance.new("TextLabel", P)
+SL.Size = UDim2.new(1, 0, 0.25, 0)
+SL.Position = UDim2.new(0, 0, 0.75, 0)
+SL.BackgroundTransparency = 1
+SL.Text = "Speed : "..speed
+SL.TextColor3 = Color3.fromRGB(200, 200, 200)
+SL.Font = Enum.Font.GothamMedium
+SL.TextScaled = true
+
+--------------------------------------------------------------------
+-- 🔵 SLIDER DRAG
+--------------------------------------------------------------------
+local drag = false
+
+SB.InputBegan:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 then
+		drag = true
+	end
+end)
+
+UIS.InputEnded:Connect(function(i)
+	if i.UserInputType == Enum.UserInputType.MouseButton1 then
+		drag = false
+	end
+end)
+
+UIS.InputChanged:Connect(function(i)
+	if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+		local x = math.clamp(i.Position.X - SB.AbsolutePosition.X, 0, SB.AbsoluteSize.X)
+		SBtn.Position = UDim2.new(0, x - 7, 0, -4)
+		speed = math.floor(x / SB.AbsoluteSize.X * 200)
+		if speed < 10 then speed = 10 end
+		SL.Text = "Speed : " .. speed
+	end
+end)
+
+--------------------------------------------------------------------
+-- 🔵 FLY SYSTEM
+--------------------------------------------------------------------
+local function startFly()
+	fly = true
+	bg = Instance.new("BodyGyro", char.HumanoidRootPart)
+	bg.P = 9e5
+	bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+
+	bv = Instance.new("BodyVelocity", char.HumanoidRootPart)
+	bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+
+	hum.PlatformStand = true
+
+	-- Highlight fly button when active
+	tween(FB, {0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {BackgroundColor3 = Color3.fromRGB(90, 0, 180)})
+end
+
+local function stopFly()
+	fly = false
+	hum.PlatformStand = false
+	if bg then bg:Destroy() end
+	if bv then bv:Destroy() end
+
+	-- Reset color
+	tween(FB, {0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {BackgroundColor3 = Color3.fromRGB(35, 35, 35)})
+end
+
+FB.MouseButton1Click:Connect(function()
+	if fly then stopFly() else startFly() end
+end)
+
+--------------------------------------------------------------------
+-- 🔵 INVISIBILITY
+--------------------------------------------------------------------
+IB.MouseButton1Click:Connect(function()
+	invis = not invis
+	
+	-- Highlight knop
+	tween(IB, {0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {
+		BackgroundColor3 = invis and Color3.fromRGB(90,0,180) or Color3.fromRGB(35,35,35)
+	})
+
+	for _, p in pairs(char:GetDescendants()) do
+		if p:IsA("BasePart") or p:IsA("MeshPart") then
+			p.Transparency = invis and 1 or 0
+		end
+	end
+end)
+
+--------------------------------------------------------------------
+-- 🔵 FLY MOVEMENT
+--------------------------------------------------------------------
+RS.RenderStepped:Connect(function()
+	if fly then
+		local cam = workspace.CurrentCamera
+		local m = Vector3.new()
+
+		if UIS:IsKeyDown(Enum.KeyCode.W) then m += cam.CFrame.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.S) then m -= cam.CFrame.LookVector end
+		if UIS:IsKeyDown(Enum.KeyCode.A) then m -= cam.CFrame.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.D) then m += cam.CFrame.RightVector end
+		if UIS:IsKeyDown(Enum.KeyCode.Space) then m += Vector3.new(0,1,0) end
+		if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then m -= Vector3.new(0,1,0) end
+
+		if m.Magnitude > 0 then m = m.Unit end
+		bv.Velocity = m * speed
+		bg.CFrame = cam.CFrame
+	end
+end)
