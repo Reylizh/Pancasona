@@ -11,211 +11,1145 @@ local invis = false
 local speed = 60
 local bg, bv
 
--- Main GUI
-local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-gui.IgnoreGuiInset = true
-
--- FADE IN
-gui.Enabled = false
-task.wait(0.2)
-gui.Enabled = true
-
---------------------------------------------------------------------
--- 🔵 FUNCTION Tween
---------------------------------------------------------------------
-local function tween(obj, info, props)
-	return TS:Create(obj, TweenInfo.new(info[1], info[2], info[3]), props):Play()
-end
-
---------------------------------------------------------------------
--- 🔵 BUTTON CREATOR (Rounded + Glow + Hover)
---------------------------------------------------------------------
-local function createRoundButton(parent, posUD, color, text)
-	local b = Instance.new("TextButton", parent)
-	b.Size = UDim2.new(0, 70, 0, 70)
-	b.Position = posUD
-	b.BackgroundColor3 = color
-	b.Text = text
-	b.TextColor3 = Color3.fromRGB(255, 255, 255)
-	b.TextScaled = true
-	b.Font = Enum.Font.GothamBlack
-	b.AutoButtonColor = false
-
-	Instance.new("UICorner", b).CornerRadius = UDim.new(1, 0)
-
-	-- Glow
-	local UIStroke = Instance.new("UIStroke", b)
-	UIStroke.Color = Color3.fromRGB(140, 0, 255)
-	UIStroke.Thickness = 2
-	UIStroke.Transparency = 0.3
-
-	-- Hover effect
-	b.MouseEnter:Connect(function()
-		tween(b, {0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {Size = UDim2.new(0, 76, 0, 76)})
-	end)
-	b.MouseLeave:Connect(function()
-		tween(b, {0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {Size = UDim2.new(0, 70, 0, 70)})
-	end)
-
-	return b
-end
-
---------------------------------------------------------------------
--- 🔵 BUTTON FLY + INVIS
---------------------------------------------------------------------
-local FB = createRoundButton(gui, UDim2.new(0.8, 0, 0.45, 0), Color3.fromRGB(35, 35, 35), "✦")
-local IB = createRoundButton(gui, UDim2.new(0.8, 0, 0.55, 0), Color3.fromRGB(35, 35, 35), "👻")
-
---------------------------------------------------------------------
--- 🔵 SPEED PANEL (Modern)
---------------------------------------------------------------------
-local P = Instance.new("Frame", gui)
-P.Size = UDim2.new(0, 240, 0, 140)
-P.Position = UDim2.new(0.63, 0, 0.62, 0)
-P.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-Instance.new("UICorner", P).CornerRadius = UDim.new(0, 20)
-
--- Stroke Glow
-local stroke = Instance.new("UIStroke", P)
-stroke.Color = Color3.fromRGB(150, 0, 255)
-stroke.Thickness = 2
-stroke.Transparency = 0.2
-
--- Fade-in
-P.BackgroundTransparency = 1
-stroke.Transparency = 1
-tween(P, {0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {BackgroundTransparency = 0})
-tween(stroke, {0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {Transparency = 0.2})
-
-local PT = Instance.new("TextLabel", P)
-PT.Size = UDim2.new(1, 0, 0.25, 0)
-PT.BackgroundTransparency = 1
-PT.Text = "Speed"
-PT.TextColor3 = Color3.fromRGB(200, 200, 255)
-PT.Font = Enum.Font.GothamBold
-PT.TextScaled = true
-
--- SLIDER track
-local SB = Instance.new("Frame", P)
-SB.Size = UDim2.new(0.85, 0, 0.2, 0)
-SB.Position = UDim2.new(0.075, 0, 0.45, 0)
-SB.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-Instance.new("UICorner", SB).CornerRadius = UDim.new(0, 10)
-
--- SLIDER button (glossy)
-local SBtn = Instance.new("Frame", SB)
-SBtn.Size = UDim2.new(0.1, 0, 1.3, 0)
-SBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
-Instance.new("UICorner", SBtn).CornerRadius = UDim.new(0, 8)
-
-local glow = Instance.new("UIStroke", SBtn)
-glow.Color = Color3.fromRGB(255, 0, 255)
-glow.Thickness = 2
-glow.Transparency = 0.2
-
-local SL = Instance.new("TextLabel", P)
-SL.Size = UDim2.new(1, 0, 0.25, 0)
-SL.Position = UDim2.new(0, 0, 0.75, 0)
-SL.BackgroundTransparency = 1
-SL.Text = "Speed : "..speed
-SL.TextColor3 = Color3.fromRGB(200, 200, 200)
-SL.Font = Enum.Font.GothamMedium
-SL.TextScaled = true
-
---------------------------------------------------------------------
--- 🔵 SLIDER DRAG
---------------------------------------------------------------------
-local drag = false
-
-SB.InputBegan:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 then
-		drag = true
-	end
-end)
-
-UIS.InputEnded:Connect(function(i)
-	if i.UserInputType == Enum.UserInputType.MouseButton1 then
-		drag = false
-	end
-end)
-
-UIS.InputChanged:Connect(function(i)
-	if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
-		local x = math.clamp(i.Position.X - SB.AbsolutePosition.X, 0, SB.AbsoluteSize.X)
-		SBtn.Position = UDim2.new(0, x - 7, 0, -4)
-		speed = math.floor(x / SB.AbsoluteSize.X * 200)
-		if speed < 10 then speed = 10 end
-		SL.Text = "Speed : " .. speed
-	end
-end)
-
---------------------------------------------------------------------
--- 🔵 FLY SYSTEM
---------------------------------------------------------------------
+-- Fly system functions
 local function startFly()
-	fly = true
-	bg = Instance.new("BodyGyro", char.HumanoidRootPart)
-	bg.P = 9e5
-	bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    fly = true
+    bg = Instance.new("BodyGyro", char.HumanoidRootPart)
+    bg.P = 9e5
+    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
 
-	bv = Instance.new("BodyVelocity", char.HumanoidRootPart)
-	bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+    bv = Instance.new("BodyVelocity", char.HumanoidRootPart)
+    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
 
-	hum.PlatformStand = true
-
-	-- Highlight fly button when active
-	tween(FB, {0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {BackgroundColor3 = Color3.fromRGB(90, 0, 180)})
+    hum.PlatformStand = true
 end
 
 local function stopFly()
-	fly = false
-	hum.PlatformStand = false
-	if bg then bg:Destroy() end
-	if bv then bv:Destroy() end
-
-	-- Reset color
-	tween(FB, {0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {BackgroundColor3 = Color3.fromRGB(35, 35, 35)})
+    fly = false
+    hum.PlatformStand = false
+    if bg then bg:Destroy() end
+    if bv then bv:Destroy() end
 end
 
-FB.MouseButton1Click:Connect(function()
-	if fly then stopFly() else startFly() end
-end)
-
---------------------------------------------------------------------
--- 🔵 INVISIBILITY
---------------------------------------------------------------------
-IB.MouseButton1Click:Connect(function()
-	invis = not invis
-	
-	-- Highlight knop
-	tween(IB, {0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out}, {
-		BackgroundColor3 = invis and Color3.fromRGB(90,0,180) or Color3.fromRGB(35,35,35)
-	})
-
-	for _, p in pairs(char:GetDescendants()) do
-		if p:IsA("BasePart") or p:IsA("MeshPart") then
-			p.Transparency = invis and 1 or 0
-		end
-	end
-end)
-
---------------------------------------------------------------------
--- 🔵 FLY MOVEMENT
---------------------------------------------------------------------
+-- Fly movement
 RS.RenderStepped:Connect(function()
-	if fly then
-		local cam = workspace.CurrentCamera
-		local m = Vector3.new()
+    if fly then
+        local cam = workspace.CurrentCamera
+        local m = Vector3.new()
 
-		if UIS:IsKeyDown(Enum.KeyCode.W) then m += cam.CFrame.LookVector end
-		if UIS:IsKeyDown(Enum.KeyCode.S) then m -= cam.CFrame.LookVector end
-		if UIS:IsKeyDown(Enum.KeyCode.A) then m -= cam.CFrame.RightVector end
-		if UIS:IsKeyDown(Enum.KeyCode.D) then m += cam.CFrame.RightVector end
-		if UIS:IsKeyDown(Enum.KeyCode.Space) then m += Vector3.new(0,1,0) end
-		if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then m -= Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.W) then m += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then m -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then m -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then m += cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then m += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then m -= Vector3.new(0,1,0) end
 
-		if m.Magnitude > 0 then m = m.Unit end
-		bv.Velocity = m * speed
-		bg.CFrame = cam.CFrame
-	end
+        if m.Magnitude > 0 then m = m.Unit end
+        bv.Velocity = m * speed
+        bg.CFrame = cam.CFrame
+    end
 end)
+
+-- Invisibility function
+local function toggleInvisibility()
+    invis = not invis
+    for _, p in pairs(char:GetDescendants()) do
+        if p:IsA("BasePart") or p:IsA("MeshPart") then
+            p.Transparency = invis and 1 or 0
+        end
+    end
+    return invis
+end
+
+-- No Clip function
+local function toggleNoClip()
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part.CanCollide then
+            part.CanCollide = not part.CanCollide
+        end
+    end
+end
+
+-- Modified CreateModernGUI function with Fly Mode integration
+local function CreateModernGUI()
+    local UIS = game:GetService('UserInputService')
+    local TweenService = game:GetService("TweenService")
+    local RunService = game:GetService("RunService")
+    local Players = game:GetService("Players")
+    
+    local ScreenGui = Instance.new("ScreenGui")
+    local MainContainer = Instance.new("Frame")
+    local LogoButton = Instance.new("TextButton")
+    local MainFrame = Instance.new("Frame")
+    local TopBar = Instance.new("Frame")
+    local Title = Instance.new("TextLabel")
+    local CloseButton = Instance.new("TextButton")
+    local MinimizeButton = Instance.new("TextButton")
+    local TabButtonsFrame = Instance.new("Frame")
+    local PagesFolder = Instance.new("Folder")
+    local BottomBar = Instance.new("Frame")
+    local StatusLabel = Instance.new("TextLabel")
+    local TimeLabel = Instance.new("TextLabel")
+    
+    local ConfirmationOverlay = Instance.new("Frame")
+    local ConfirmationDialog = Instance.new("Frame")
+    local DialogTitle = Instance.new("TextLabel")
+    local DialogMessage = Instance.new("TextLabel")
+    local YesButton = Instance.new("TextButton")
+    local NoButton = Instance.new("TextButton")
+    local ButtonContainer = Instance.new("Frame")
+    
+    ScreenGui.Parent = game:GetService("CoreGui")
+    ScreenGui.Name = "ModernPurpleHub"
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.ResetOnSpawn = false
+
+    MainContainer.Name = "MainContainer"
+    MainContainer.Parent = ScreenGui
+    MainContainer.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+    MainContainer.BackgroundTransparency = 0.8
+    MainContainer.BorderSizePixel = 0
+    MainContainer.Position = UDim2.new(0.3, 0, 0.2, 0)
+    MainContainer.Size = UDim2.new(0, 600, 0, 450)
+    MainContainer.Visible = false
+    
+    local MainContainerCorner = Instance.new("UICorner")
+    MainContainerCorner.Parent = MainContainer
+    MainContainerCorner.CornerRadius = UDim.new(0, 15)
+
+    MainFrame.Name = "MainFrame"
+    MainFrame.Parent = MainContainer
+    MainFrame.BackgroundColor3 = Color3.fromRGB(25, 0, 40)
+    MainFrame.BackgroundTransparency = 0.3
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Size = UDim2.new(1, 0, 1, 0)
+    MainFrame.ClipsDescendants = true
+    
+    local MainFrameCorner = Instance.new("UICorner")
+    MainFrameCorner.Parent = MainFrame
+    MainFrameCorner.CornerRadius = UDim.new(0, 12)
+
+    TopBar.Name = "TopBar"
+    TopBar.Parent = MainFrame
+    TopBar.BackgroundColor3 = Color3.fromRGB(35, 0, 55)
+    TopBar.BackgroundTransparency = 0.4
+    TopBar.BorderSizePixel = 0
+    TopBar.Size = UDim2.new(1, 0, 0, 40)
+    TopBar.Active = true
+    
+    local TopBarCorner = Instance.new("UICorner")
+    TopBarCorner.Parent = TopBar
+    TopBarCorner.CornerRadius = UDim.new(0, 12)
+
+    Title.Name = "Title"
+    Title.Parent = TopBar
+    Title.BackgroundTransparency = 1
+    Title.Position = UDim2.new(0, 15, 0, 0)
+    Title.Size = UDim2.new(0, 200, 1, 0)
+    Title.Font = Enum.Font.GothamBold
+    Title.Text = "PURPLE HUB v6.0"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextSize = 16
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local TextStroke = Instance.new("UIStroke")
+    TextStroke.Parent = Title
+    TextStroke.Color = Color3.fromRGB(180, 100, 255)
+    TextStroke.Thickness = 1
+    TextStroke.Transparency = 0.5
+
+    CloseButton.Name = "CloseButton"
+    CloseButton.Parent = TopBar
+    CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    CloseButton.BorderSizePixel = 0
+    CloseButton.Position = UDim2.new(1, -40, 0.5, -15)
+    CloseButton.Size = UDim2.new(0, 30, 0, 30)
+    CloseButton.Font = Enum.Font.GothamBold
+    CloseButton.Text = "X"
+    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CloseButton.TextSize = 14
+    CloseButton.ZIndex = 2
+    CloseButton.AutoButtonColor = true
+    
+    local CloseCorner = Instance.new("UICorner")
+    CloseCorner.Parent = CloseButton
+    CloseCorner.CornerRadius = UDim.new(0, 6)
+
+    MinimizeButton.Name = "MinimizeButton"
+    MinimizeButton.Parent = TopBar
+    MinimizeButton.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
+    MinimizeButton.BorderSizePixel = 0
+    MinimizeButton.Position = UDim2.new(1, -80, 0.5, -15)
+    MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+    MinimizeButton.Font = Enum.Font.GothamBold
+    MinimizeButton.Text = "_"
+    MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MinimizeButton.TextSize = 14
+    MinimizeButton.ZIndex = 2
+    MinimizeButton.AutoButtonColor = true
+    
+    local MinimizeCorner = Instance.new("UICorner")
+    MinimizeCorner.Parent = MinimizeButton
+    MinimizeCorner.CornerRadius = UDim.new(0, 6)
+
+    TabButtonsFrame.Name = "TabButtonsFrame"
+    TabButtonsFrame.Parent = MainFrame
+    TabButtonsFrame.BackgroundColor3 = Color3.fromRGB(30, 0, 45)
+    TabButtonsFrame.BackgroundTransparency = 0.4
+    TabButtonsFrame.BorderSizePixel = 0
+    TabButtonsFrame.Position = UDim2.new(0, 0, 0, 40)
+    TabButtonsFrame.Size = UDim2.new(0, 150, 0, 370)
+    
+    local TabButtonsCorner = Instance.new("UICorner")
+    TabButtonsCorner.Parent = TabButtonsFrame
+    TabButtonsCorner.CornerRadius = UDim.new(0, 12)
+
+    PagesFolder.Name = "PagesFolder"
+    PagesFolder.Parent = MainFrame
+
+    BottomBar.Name = "BottomBar"
+    BottomBar.Parent = MainFrame
+    BottomBar.BackgroundColor3 = Color3.fromRGB(30, 0, 45)
+    BottomBar.BackgroundTransparency = 0.4
+    BottomBar.BorderSizePixel = 0
+    BottomBar.Position = UDim2.new(0, 0, 1, -40)
+    BottomBar.Size = UDim2.new(1, 0, 0, 40)
+    
+    local BottomBarCorner = Instance.new("UICorner")
+    BottomBarCorner.Parent = BottomBar
+    BottomBarCorner.CornerRadius = UDim.new(0, 12)
+
+    StatusLabel.Name = "StatusLabel"
+    StatusLabel.Parent = BottomBar
+    StatusLabel.BackgroundTransparency = 1
+    StatusLabel.Position = UDim2.new(0, 15, 0, 0)
+    StatusLabel.Size = UDim2.new(0, 200, 1, 0)
+    StatusLabel.Font = Enum.Font.Gotham
+    StatusLabel.Text = "Status: Ready"
+    StatusLabel.TextColor3 = Color3.fromRGB(220, 180, 255)
+    StatusLabel.TextSize = 12
+    StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    TimeLabel.Name = "TimeLabel"
+    TimeLabel.Parent = BottomBar
+    TimeLabel.BackgroundTransparency = 1
+    TimeLabel.Position = UDim2.new(1, -215, 0, 0)
+    TimeLabel.Size = UDim2.new(0, 200, 1, 0)
+    TimeLabel.Font = Enum.Font.Gotham
+    TimeLabel.Text = "00:00:00"
+    TimeLabel.TextColor3 = Color3.fromRGB(220, 180, 255)
+    TimeLabel.TextSize = 12
+    TimeLabel.TextXAlignment = Enum.TextXAlignment.Right
+
+    LogoButton.Name = "LogoButton"
+    LogoButton.Parent = ScreenGui
+    LogoButton.BackgroundColor3 = Color3.fromRGB(80, 0, 120)
+    LogoButton.BackgroundTransparency = 0.3
+    LogoButton.Position = UDim2.new(0, 20, 0, 20)
+    LogoButton.Size = UDim2.new(0, 60, 0, 60)
+    LogoButton.Font = Enum.Font.GothamBold
+    LogoButton.Text = "🎮"
+    LogoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LogoButton.TextSize = 24
+    LogoButton.AutoButtonColor = true
+    LogoButton.ZIndex = 10
+    LogoButton.Active = true
+    
+    local LogoCorner = Instance.new("UICorner")
+    LogoCorner.Parent = LogoButton
+    LogoCorner.CornerRadius = UDim.new(0, 15)
+    
+    local LogoGlow = Instance.new("UIStroke")
+    LogoGlow.Parent = LogoButton
+    LogoGlow.Color = Color3.fromRGB(150, 100, 255)
+    LogoGlow.Thickness = 3
+    LogoGlow.Transparency = 0.3
+
+    ConfirmationOverlay.Name = "ConfirmationOverlay"
+    ConfirmationOverlay.Parent = ScreenGui
+    ConfirmationOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    ConfirmationOverlay.BackgroundTransparency = 0.7
+    ConfirmationOverlay.BorderSizePixel = 0
+    ConfirmationOverlay.Size = UDim2.new(1, 0, 1, 0)
+    ConfirmationOverlay.Visible = false
+    ConfirmationOverlay.ZIndex = 20
+
+    ConfirmationDialog.Name = "ConfirmationDialog"
+    ConfirmationDialog.Parent = ConfirmationOverlay
+    ConfirmationDialog.BackgroundColor3 = Color3.fromRGB(35, 0, 55)
+    ConfirmationDialog.BackgroundTransparency = 0.1
+    ConfirmationDialog.BorderSizePixel = 0
+    ConfirmationDialog.Position = UDim2.new(0.5, -175, 0.5, -100)
+    ConfirmationDialog.Size = UDim2.new(0, 350, 0, 200)
+    ConfirmationDialog.ZIndex = 21
+    
+    local DialogCorner = Instance.new("UICorner")
+    DialogCorner.Parent = ConfirmationDialog
+    DialogCorner.CornerRadius = UDim.new(0, 15)
+    
+    local DialogStroke = Instance.new("UIStroke")
+    DialogStroke.Parent = ConfirmationDialog
+    DialogStroke.Color = Color3.fromRGB(120, 80, 200)
+    DialogStroke.Thickness = 3
+    DialogStroke.Transparency = 0.2
+
+    DialogTitle.Name = "DialogTitle"
+    DialogTitle.Parent = ConfirmationDialog
+    DialogTitle.BackgroundTransparency = 1
+    DialogTitle.Position = UDim2.new(0, 0, 0, 20)
+    DialogTitle.Size = UDim2.new(1, 0, 0, 40)
+    DialogTitle.Font = Enum.Font.GothamBold
+    DialogTitle.Text = "⚠️ KONFIRMASI PENUTUPAN ⚠️"
+    DialogTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DialogTitle.TextSize = 18
+    DialogTitle.TextXAlignment = Enum.TextXAlignment.Center
+    DialogTitle.ZIndex = 22
+    
+    local TitleStroke = Instance.new("UIStroke")
+    TitleStroke.Parent = DialogTitle
+    TitleStroke.Color = Color3.fromRGB(255, 200, 100)
+    TitleStroke.Thickness = 2
+    TitleStroke.Transparency = 0.3
+
+    DialogMessage.Name = "DialogMessage"
+    DialogMessage.Parent = ConfirmationDialog
+    DialogMessage.BackgroundTransparency = 1
+    DialogMessage.Position = UDim2.new(0, 20, 0, 70)
+    DialogMessage.Size = UDim2.new(1, -40, 0, 50)
+    DialogMessage.Font = Enum.Font.Gotham
+    DialogMessage.Text = "Ini Akan Menutup GUI\nApakah Anda Yakin?"
+    DialogMessage.TextColor3 = Color3.fromRGB(220, 200, 255)
+    DialogMessage.TextSize = 14
+    DialogMessage.TextXAlignment = Enum.TextXAlignment.Center
+    DialogMessage.TextYAlignment = Enum.TextYAlignment.Center
+    DialogMessage.TextWrapped = true
+    DialogMessage.ZIndex = 22
+
+    ButtonContainer.Name = "ButtonContainer"
+    ButtonContainer.Parent = ConfirmationDialog
+    ButtonContainer.BackgroundTransparency = 1
+    ButtonContainer.Position = UDim2.new(0, 40, 0, 140)
+    ButtonContainer.Size = UDim2.new(1, -80, 0, 40)
+    ButtonContainer.ZIndex = 22
+
+    YesButton.Name = "YesButton"
+    YesButton.Parent = ButtonContainer
+    YesButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    YesButton.BorderSizePixel = 0
+    YesButton.Position = UDim2.new(0, 0, 0, 0)
+    YesButton.Size = UDim2.new(0, 120, 0, 40)
+    YesButton.Font = Enum.Font.GothamBold
+    YesButton.Text = "✅ YA"
+    YesButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    YesButton.TextSize = 14
+    YesButton.ZIndex = 23
+    YesButton.AutoButtonColor = true
+    
+    local YesCorner = Instance.new("UICorner")
+    YesCorner.Parent = YesButton
+    YesCorner.CornerRadius = UDim.new(0, 8)
+    
+    local YesStroke = Instance.new("UIStroke")
+    YesStroke.Parent = YesButton
+    YesStroke.Color = Color3.fromRGB(255, 120, 120)
+    YesStroke.Thickness = 2
+
+    NoButton.Name = "NoButton"
+    NoButton.Parent = ButtonContainer
+    NoButton.BackgroundColor3 = Color3.fromRGB(80, 180, 80)
+    NoButton.BorderSizePixel = 0
+    NoButton.Position = UDim2.new(1, -120, 0, 0)
+    NoButton.Size = UDim2.new(0, 120, 0, 40)
+    NoButton.Font = Enum.Font.GothamBold
+    NoButton.Text = "❌ TIDAK"
+    NoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NoButton.TextSize = 14
+    NoButton.ZIndex = 23
+    NoButton.AutoButtonColor = true
+    
+    local NoCorner = Instance.new("UICorner")
+    NoCorner.Parent = NoButton
+    NoCorner.CornerRadius = UDim.new(0, 8)
+    
+    local NoStroke = Instance.new("UIStroke")
+    NoStroke.Parent = NoButton
+    NoStroke.Color = Color3.fromRGB(120, 220, 120)
+    NoStroke.Thickness = 2
+
+    local tabs = {
+        {Name = "Home", Icon = "🔮"},
+        {Name = "Player", Icon = "👤"}, 
+        {Name = "Visuals", Icon = "👁️"},
+        {Name = "World", Icon = "🌍"},
+        {Name = "Settings", Icon = "⚙️"}
+    }
+
+    local currentPage = nil
+    local buttons = {}
+    local guiVisible = false
+
+    for i, tabData in pairs(tabs) do
+        local tabButton = Instance.new("TextButton")
+        tabButton.Name = tabData.Name .. "Button"
+        tabButton.Parent = TabButtonsFrame
+        tabButton.BackgroundColor3 = Color3.fromRGB(50, 0, 75)
+        tabButton.BackgroundTransparency = 0.3
+        tabButton.BorderSizePixel = 0
+        tabButton.Position = UDim2.new(0, 10, 0, 10 + ((i-1) * 50))
+        tabButton.Size = UDim2.new(0, 130, 0, 45)
+        tabButton.Font = Enum.Font.GothamBold
+        tabButton.Text = "   " .. tabData.Icon .. "  " .. tabData.Name
+        tabButton.TextColor3 = Color3.fromRGB(230, 200, 255)
+        tabButton.TextSize = 12
+        tabButton.TextXAlignment = Enum.TextXAlignment.Left
+        tabButton.AutoButtonColor = true
+        tabButton.ZIndex = 2
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.Parent = tabButton
+        buttonCorner.CornerRadius = UDim.new(0, 8)
+        
+        local buttonStroke = Instance.new("UIStroke")
+        buttonStroke.Parent = tabButton
+        buttonStroke.Color = Color3.fromRGB(100, 50, 150)
+        buttonStroke.Thickness = 1
+        buttonStroke.Transparency = 0.3
+
+        local pageFrame = Instance.new("ScrollingFrame")
+        pageFrame.Name = tabData.Name .. "Page"
+        pageFrame.Parent = PagesFolder
+        pageFrame.Active = true
+        pageFrame.BackgroundColor3 = Color3.fromRGB(25, 0, 40)
+        pageFrame.BackgroundTransparency = 0.3
+        pageFrame.BorderSizePixel = 0
+        pageFrame.Position = UDim2.new(0, 150, 0, 40)
+        pageFrame.Size = UDim2.new(0, 450, 0, 370)
+        pageFrame.CanvasSize = UDim2.new(0, 0, 0, 800)
+        pageFrame.ScrollBarThickness = 3
+        pageFrame.ScrollBarImageColor3 = Color3.fromRGB(120, 80, 180)
+        pageFrame.Visible = false
+        pageFrame.ZIndex = 1
+        
+        local pageCorner = Instance.new("UICorner")
+        pageCorner.Parent = pageFrame
+        pageCorner.CornerRadius = UDim.new(0, 12)
+        
+        local uiListLayout = Instance.new("UIListLayout")
+        uiListLayout.Parent = pageFrame
+        uiListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        uiListLayout.Padding = UDim.new(0, 10)
+        
+        local uiPadding = Instance.new("UIPadding")
+        uiPadding.Parent = pageFrame
+        uiPadding.PaddingTop = UDim.new(0, 10)
+        uiPadding.PaddingLeft = UDim.new(0, 10)
+        uiPadding.PaddingRight = UDim.new(0, 10)
+
+        tabButton.MouseButton1Click:Connect(function()
+            if currentPage then
+                currentPage.Visible = false
+                buttons[currentPage.Name].BackgroundColor3 = Color3.fromRGB(50, 0, 75)
+            end
+            pageFrame.Visible = true
+            tabButton.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
+            currentPage = pageFrame
+            StatusLabel.Text = "Status: " .. tabData.Name .. " Tab Selected"
+        end)
+
+        buttons[pageFrame.Name] = tabButton
+        
+        if i == 1 then
+            pageFrame.Visible = true
+            tabButton.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
+            currentPage = pageFrame
+        end
+    end
+
+    local function CreateWelcomePanel(parent)
+        local welcomeFrame = Instance.new("Frame")
+        welcomeFrame.Name = "WelcomePanel"
+        welcomeFrame.Parent = parent
+        welcomeFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 80)
+        welcomeFrame.BackgroundTransparency = 0.2
+        welcomeFrame.BorderSizePixel = 0
+        welcomeFrame.Size = UDim2.new(0, 420, 0, 180)
+        welcomeFrame.ZIndex = 2
+        
+        local welcomeCorner = Instance.new("UICorner")
+        welcomeCorner.Parent = welcomeFrame
+        welcomeCorner.CornerRadius = UDim.new(0, 12)
+        
+        local welcomeStroke = Instance.new("UIStroke")
+        welcomeStroke.Parent = welcomeFrame
+        welcomeStroke.Color = Color3.fromRGB(120, 80, 200)
+        welcomeStroke.Thickness = 3
+        welcomeStroke.Transparency = 0.2
+
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Name = "WelcomeTitle"
+        titleLabel.Parent = welcomeFrame
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Position = UDim2.new(0, 15, 0, 15)
+        titleLabel.Size = UDim2.new(0, 390, 0, 30)
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.Text = "🌟 WELCOME TO PURPLE HUB v6.0 🌟"
+        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLabel.TextSize = 16
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+        titleLabel.ZIndex = 3
+        
+        local titleStroke = Instance.new("UIStroke")
+        titleStroke.Parent = titleLabel
+        titleStroke.Color = Color3.fromRGB(200, 150, 255)
+        titleStroke.Thickness = 1
+        titleStroke.Transparency = 0.3
+
+        local descLabel = Instance.new("TextLabel")
+        descLabel.Name = "WelcomeDesc"
+        descLabel.Parent = welcomeFrame
+        descLabel.BackgroundTransparency = 1
+        descLabel.Position = UDim2.new(0, 20, 0, 55)
+        descLabel.Size = UDim2.new(0, 380, 0, 80)
+        descLabel.Font = Enum.Font.Gotham
+        descLabel.Text = "Premium Roblox GUI dengan fitur lengkap dan animasi yang smooth.\n\n✨ Fitur Unggulan:\n• Fly Mode dengan Speed Control\n• No Clip & Invisibility\n• Animasi Bounce yang Elegan\n• Drag & Drop Interface"
+        descLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
+        descLabel.TextSize = 12
+        descLabel.TextXAlignment = Enum.TextXAlignment.Left
+        descLabel.TextYAlignment = Enum.TextYAlignment.Top
+        descLabel.TextWrapped = true
+        descLabel.ZIndex = 3
+
+        local tipsLabel = Instance.new("TextLabel")
+        tipsLabel.Name = "TipsLabel"
+        tipsLabel.Parent = welcomeFrame
+        tipsLabel.BackgroundTransparency = 1
+        tipsLabel.Position = UDim2.new(0, 20, 0, 145)
+        tipsLabel.Size = UDim2.new(0, 380, 0, 25)
+        tipsLabel.Font = Enum.Font.Gotham
+        tipsLabel.Text = "💡 Tips: Aktifkan Fly Mode untuk mengakses speed slider!"
+        tipsLabel.TextColor3 = Color3.fromRGB(180, 150, 255)
+        tipsLabel.TextSize = 10
+        tipsLabel.TextXAlignment = Enum.TextXAlignment.Left
+        tipsLabel.ZIndex = 3
+
+        return welcomeFrame
+    end
+
+    local function CreateFeatureCard(parent, title, description, icon)
+        local cardFrame = Instance.new("Frame")
+        cardFrame.Name = "FeatureCard"
+        cardFrame.Parent = parent
+        cardFrame.BackgroundColor3 = Color3.fromRGB(45, 0, 70)
+        cardFrame.BackgroundTransparency = 0.3
+        cardFrame.BorderSizePixel = 0
+        cardFrame.Size = UDim2.new(0, 420, 0, 80)
+        cardFrame.ZIndex = 2
+        
+        local cardCorner = Instance.new("UICorner")
+        cardCorner.Parent = cardFrame
+        cardCorner.CornerRadius = UDim.new(0, 10)
+        
+        local cardStroke = Instance.new("UIStroke")
+        cardStroke.Parent = cardFrame
+        cardStroke.Color = Color3.fromRGB(100, 50, 150)
+        cardStroke.Thickness = 2
+        cardStroke.Transparency = 0.3
+
+        local iconLabel = Instance.new("TextLabel")
+        iconLabel.Name = "CardIcon"
+        iconLabel.Parent = cardFrame
+        iconLabel.BackgroundTransparency = 1
+        iconLabel.Position = UDim2.new(0, 15, 0, 15)
+        iconLabel.Size = UDim2.new(0, 50, 0, 50)
+        iconLabel.Font = Enum.Font.GothamBold
+        iconLabel.Text = icon or "⭐"
+        iconLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        iconLabel.TextSize = 24
+        iconLabel.TextXAlignment = Enum.TextXAlignment.Center
+        iconLabel.ZIndex = 3
+
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Name = "CardTitle"
+        titleLabel.Parent = cardFrame
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Position = UDim2.new(0, 80, 0, 15)
+        titleLabel.Size = UDim2.new(0, 320, 0, 25)
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.Text = title
+        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLabel.TextSize = 14
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+        titleLabel.ZIndex = 3
+
+        local descLabel = Instance.new("TextLabel")
+        descLabel.Name = "CardDesc"
+        descLabel.Parent = cardFrame
+        descLabel.BackgroundTransparency = 1
+        descLabel.Position = UDim2.new(0, 80, 0, 40)
+        descLabel.Size = UDim2.new(0, 320, 0, 30)
+        descLabel.Font = Enum.Font.Gotham
+        descLabel.Text = description
+        descLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
+        descLabel.TextSize = 11
+        descLabel.TextXAlignment = Enum.TextXAlignment.Left
+        descLabel.TextYAlignment = Enum.TextYAlignment.Top
+        descLabel.TextWrapped = true
+        descLabel.ZIndex = 3
+
+        return cardFrame
+    end
+
+    -- MODIFIED: CreateToggleSlider dengan fix background putih
+    local function CreateToggleSlider(parent, text, icon, defaultValue, isFlyMode)
+        local toggleFrame = Instance.new("Frame")
+        toggleFrame.Parent = parent
+        toggleFrame.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+        toggleFrame.BackgroundTransparency = 0.3
+        toggleFrame.BorderSizePixel = 0
+        toggleFrame.Size = UDim2.new(0, 420, 0, isFlyMode and 120 or 60)
+        toggleFrame.ZIndex = 1
+        
+        local toggleCorner = Instance.new("UICorner")
+        toggleCorner.Parent = toggleFrame
+        toggleCorner.CornerRadius = UDim.new(0, 10)
+        
+        local toggleStroke = Instance.new("UIStroke")
+        toggleStroke.Parent = toggleFrame
+        toggleStroke.Color = Color3.fromRGB(100, 50, 150)
+        toggleStroke.Thickness = 2
+        toggleStroke.Transparency = 0.3
+
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Parent = toggleFrame
+        textLabel.BackgroundTransparency = 1
+        textLabel.Position = UDim2.new(0, 15, 0, 10)
+        textLabel.Size = UDim2.new(0, 250, 0, 25)
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.Text = "   " .. (icon or "⚡") .. "  " .. text
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        textLabel.TextSize = 14
+        textLabel.TextXAlignment = Enum.TextXAlignment.Left
+        textLabel.ZIndex = 2
+
+        local statusLabel = Instance.new("TextLabel")
+        statusLabel.Parent = toggleFrame
+        statusLabel.BackgroundTransparency = 1
+        statusLabel.Position = UDim2.new(0, 15, 0, 35)
+        statusLabel.Size = UDim2.new(0, 250, 0, 20)
+        statusLabel.Font = Enum.Font.Gotham
+        statusLabel.Text = "Status: OFF"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        statusLabel.TextSize = 11
+        statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        statusLabel.ZIndex = 2
+
+        -- SPEED SLIDER untuk Fly Mode - FIXED BACKGROUND
+        local speedSliderContainer
+        local speedLabel
+        local sliderTrack
+        local sliderButton
+        
+        if isFlyMode then
+            speedSliderContainer = Instance.new("Frame", toggleFrame)
+            speedSliderContainer.Size = UDim2.new(0.9, 0, 0, 40)
+            speedSliderContainer.Position = UDim2.new(0.05, 0, 0.5, 0)
+            speedSliderContainer.BackgroundTransparency = 1
+            speedSliderContainer.Visible = false
+            speedSliderContainer.ZIndex = 2
+
+            speedLabel = Instance.new("TextLabel", speedSliderContainer)
+            speedLabel.Size = UDim2.new(1, 0, 0.4, 0)
+            speedLabel.BackgroundTransparency = 1
+            speedLabel.Text = "Speed: " .. speed
+            speedLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+            speedLabel.Font = Enum.Font.Gotham
+            speedLabel.TextSize = 12
+            speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+            speedLabel.ZIndex = 3
+
+            -- SLIDER TRACK - FIXED BACKGROUND
+            sliderTrack = Instance.new("Frame", speedSliderContainer)
+            sliderTrack.Size = UDim2.new(1, 0, 0.3, 0)
+            sliderTrack.Position = UDim2.new(0, 0, 0.6, 0)
+            sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            sliderTrack.BackgroundTransparency = 0
+            sliderTrack.BorderSizePixel = 0
+            sliderTrack.ZIndex = 2
+            
+            local trackCorner = Instance.new("UICorner", sliderTrack)
+            trackCorner.CornerRadius = UDim.new(0, 5)
+            
+            local trackStroke = Instance.new("UIStroke", sliderTrack)
+            trackStroke.Color = Color3.fromRGB(100, 100, 100)
+            trackStroke.Thickness = 1
+            trackStroke.Transparency = 0.3
+
+            -- SLIDER BUTTON - FIXED BACKGROUND
+            sliderButton = Instance.new("Frame", sliderTrack)
+            sliderButton.Size = UDim2.new(0.1, 0, 1.5, 0)
+            sliderButton.Position = UDim2.new((speed - 10) / 190, -7, 0, -3)
+            sliderButton.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
+            sliderButton.BackgroundTransparency = 0
+            sliderButton.BorderSizePixel = 0
+            sliderButton.ZIndex = 3
+            
+            local buttonCorner = Instance.new("UICorner", sliderButton)
+            buttonCorner.CornerRadius = UDim.new(0, 5)
+            
+            local glow = Instance.new("UIStroke", sliderButton)
+            glow.Color = Color3.fromRGB(255, 0, 255)
+            glow.Thickness = 2
+            glow.Transparency = 0.2
+
+            -- Slider drag functionality
+            local drag = false
+            sliderTrack.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                    drag = true
+                end
+            end)
+
+            UIS.InputEnded:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1 then
+                    drag = false
+                end
+            end)
+
+            UIS.InputChanged:Connect(function(i)
+                if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+                    local x = math.clamp(i.Position.X - sliderTrack.AbsolutePosition.X, 0, sliderTrack.AbsoluteSize.X)
+                    sliderButton.Position = UDim2.new(x / sliderTrack.AbsoluteSize.X, -7, 0, -3)
+                    speed = math.floor(x / sliderTrack.AbsoluteSize.X * 190) + 10
+                    speedLabel.Text = "Speed: " .. speed
+                end
+            end)
+        end
+
+        local toggleBg = Instance.new("TextButton")
+        toggleBg.Name = "ToggleBg"
+        toggleBg.Parent = toggleFrame
+        toggleBg.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
+        toggleBg.BackgroundTransparency = 0
+        toggleBg.BorderSizePixel = 0
+        toggleBg.Position = UDim2.new(1, -80, 0, 20)
+        toggleBg.Size = UDim2.new(0, 60, 0, 25)
+        toggleBg.Text = ""
+        toggleBg.AutoButtonColor = false
+        toggleBg.ZIndex = 3
+        
+        local toggleBgCorner = Instance.new("UICorner")
+        toggleBgCorner.Parent = toggleBg
+        toggleBgCorner.CornerRadius = UDim.new(0, 12)
+        
+        local toggleBgStroke = Instance.new("UIStroke")
+        toggleBgStroke.Parent = toggleBg
+        toggleBgStroke.Color = Color3.fromRGB(120, 0, 0)
+        toggleBgStroke.Thickness = 2
+
+        local toggleButton = Instance.new("TextButton")
+        toggleButton.Name = "ToggleButton"
+        toggleButton.Parent = toggleBg
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+        toggleButton.BackgroundTransparency = 0
+        toggleButton.BorderSizePixel = 0
+        toggleButton.Position = UDim2.new(0, 3, 0, 3)
+        toggleButton.Size = UDim2.new(0, 19, 0, 19)
+        toggleButton.Text = ""
+        toggleButton.AutoButtonColor = false
+        toggleButton.ZIndex = 4
+        
+        local toggleButtonCorner = Instance.new("UICorner")
+        toggleButtonCorner.Parent = toggleButton
+        toggleButtonCorner.CornerRadius = UDim.new(0, 8)
+        
+        local toggleButtonStroke = Instance.new("UIStroke")
+        toggleButtonStroke.Parent = toggleButton
+        toggleButtonStroke.Color = Color3.fromRGB(255, 150, 150)
+        toggleButtonStroke.Thickness = 1
+
+        local isEnabled = defaultValue or false
+
+        local function UpdateToggleAppearance()
+            if isEnabled then
+                toggleBg.BackgroundColor3 = Color3.fromRGB(0, 80, 0)
+                toggleBgStroke.Color = Color3.fromRGB(0, 120, 0)
+                toggleButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+                toggleButton.Position = UDim2.new(1, -22, 0, 3)
+                toggleButtonStroke.Color = Color3.fromRGB(150, 255, 150)
+                statusLabel.Text = "Status: ON"
+                statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                
+                if isFlyMode and speedSliderContainer then
+                    speedSliderContainer.Visible = true
+                    TweenService:Create(speedSliderContainer, TweenInfo.new(0.3), {
+                        BackgroundTransparency = 1
+                    }):Play()
+                end
+            else
+                toggleBg.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
+                toggleBgStroke.Color = Color3.fromRGB(120, 0, 0)
+                toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+                toggleButton.Position = UDim2.new(0, 3, 0, 3)
+                toggleButtonStroke.Color = Color3.fromRGB(255, 150, 150)
+                statusLabel.Text = "Status: OFF"
+                statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                
+                if isFlyMode and speedSliderContainer then
+                    TweenService:Create(speedSliderContainer, TweenInfo.new(0.3), {
+                        BackgroundTransparency = 1
+                    }):Play()
+                    wait(0.3)
+                    speedSliderContainer.Visible = false
+                end
+            end
+        end
+
+        UpdateToggleAppearance()
+
+        local function ToggleState()
+            if isFlyMode then
+                if isEnabled then
+                    stopFly()
+                else
+                    startFly()
+                end
+            else
+                if text == "Invisibility" then
+                    toggleInvisibility()
+                elseif text == "No Clip" then
+                    toggleNoClip()
+                end
+            end
+            
+            isEnabled = not isEnabled
+            UpdateToggleAppearance()
+            
+            StatusLabel.Text = text .. ": " .. (isEnabled and "ACTIVATED" or "DEACTIVATED")
+            
+            return isEnabled
+        end
+
+        toggleBg.MouseButton1Click:Connect(ToggleState)
+        toggleButton.MouseButton1Click:Connect(ToggleState)
+
+        return {
+            Frame = toggleFrame,
+            Toggle = ToggleState,
+            GetState = function() return isEnabled end,
+            SetState = function(state)
+                isEnabled = state
+                UpdateToggleAppearance()
+            end
+        }
+    end
+
+    local function ShowConfirmationDialog()
+        ConfirmationOverlay.Visible = true
+        ConfirmationDialog.Position = UDim2.new(0.5, -175, 0.3, -100)
+        
+        TweenService:Create(ConfirmationDialog, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0.5, -175, 0.5, -100)
+        }):Play()
+        
+        TweenService:Create(ConfirmationOverlay, TweenInfo.new(0.3), {
+            BackgroundTransparency = 0.5
+        }):Play()
+        
+        StatusLabel.Text = "Status: Confirmation Dialog Shown"
+    end
+
+    local function HideConfirmationDialog()
+        TweenService:Create(ConfirmationDialog, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, -175, 0.3, -100)
+        }):Play()
+        
+        TweenService:Create(ConfirmationOverlay, TweenInfo.new(0.3), {
+            BackgroundTransparency = 0.7
+        }):Play()
+        
+        wait(0.3)
+        ConfirmationOverlay.Visible = false
+        StatusLabel.Text = "Status: Confirmation Dialog Hidden"
+    end
+
+    local function CloseGUI()
+        TweenService:Create(MainContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Size = UDim2.new(0, 0, 0, 0),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        
+        TweenService:Create(LogoButton, TweenInfo.new(0.4), {
+            Size = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        
+        wait(0.4)
+        ScreenGui:Destroy()
+    end
+
+    local homePage = PagesFolder:FindFirstChild("HomePage")
+    if homePage then
+        CreateWelcomePanel(homePage)
+        
+        CreateFeatureCard(homePage, "Fly Mode System", "Terbang bebas dengan kontrol kecepatan yang dapat disesuaikan", "✈️")
+        CreateFeatureCard(homePage, "Invisibility Mode", "Menjadi tak terlihat oleh pemain lain", "👻")
+        CreateFeatureCard(homePage, "Bounce Animations", "Animasi smooth saat show/hide GUI dengan efek memantul", "✨")
+    end
+
+    local playerPage = PagesFolder:FindFirstChild("PlayerPage")
+    local visualsPage = PagesFolder:FindFirstChild("VisualsPage")
+    local worldPage = PagesFolder:FindFirstChild("WorldPage")
+    local settingsPage = PagesFolder:FindFirstChild("SettingsPage")
+
+    -- Player Page dengan Fly Mode dan fitur lainnya
+    if playerPage then
+        CreateToggleSlider(playerPage, "Fly Mode", "✈️", false, true)
+        CreateToggleSlider(playerPage, "No Clip", "👻", false)
+        CreateToggleSlider(playerPage, "Invisibility", "🌀", false)
+        CreateToggleSlider(playerPage, "Speed Hack", "💨", false)
+    end
+
+    if visualsPage then
+        CreateToggleSlider(visualsPage, "ESP Players", "🎯", false)
+        CreateToggleSlider(visualsPage, "X-Ray Vision", "🔍", false)
+        CreateToggleSlider(visualsPage, "Full Bright", "💡", true)
+        CreateToggleSlider(visualsPage, "Chams", "🌈", false)
+    end
+
+    if worldPage then
+        CreateToggleSlider(worldPage, "Night Vision", "🌙", false)
+        CreateToggleSlider(worldPage, "Fog Remover", "🌫️", true)
+        CreateToggleSlider(worldPage, "Time Changer", "⏰", false)
+    end
+
+    if settingsPage then
+        CreateToggleSlider(settingsPage, "UI Sounds", "🔊", true)
+        CreateToggleSlider(settingsPage, "Auto Save", "💾", false)
+        CreateToggleSlider(settingsPage, "Notifications", "🔔", true)
+    end
+
+    local function ShowGUIWithBounce()
+        guiVisible = true
+        
+        local logoStartPos = LogoButton.Position
+        local mainContainerPos = UDim2.new(0.3, 0, 0.2, 0)
+        
+        MainContainer.Position = UDim2.new(
+            logoStartPos.X.Scale,
+            logoStartPos.X.Offset + 30,
+            logoStartPos.Y.Scale,
+            logoStartPos.Y.Offset + 30
+        )
+        MainContainer.Size = UDim2.new(0, 50, 0, 50)
+        MainContainer.Visible = true
+        
+        TweenService:Create(LogoButton, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Rotation = 360,
+            Size = UDim2.new(0, 70, 0, 70)
+        }):Play()
+        
+        wait(0.2)
+        
+        TweenService:Create(MainContainer, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = mainContainerPos,
+            Size = UDim2.new(0, 650, 0, 500)
+        }):Play()
+        
+        wait(0.1)
+        
+        TweenService:Create(MainContainer, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 600, 0, 450)
+        }):Play()
+        
+        TweenService:Create(LogoButton, TweenInfo.new(0.3), {
+            Size = UDim2.new(0, 60, 0, 60),
+            Rotation = 0
+        }):Play()
+        
+        StatusLabel.Text = "Status: GUI Shown with Bounce"
+    end
+
+    local function HideGUIWithBounce()
+        local logoPos = LogoButton.Position
+        
+        TweenService:Create(MainContainer, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 620, 0, 470)
+        }):Play()
+        
+        wait(0.1)
+        
+        TweenService:Create(MainContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Position = UDim2.new(
+                logoPos.X.Scale,
+                logoPos.X.Offset + 30,
+                logoPos.Y.Scale, 
+                logoPos.Y.Offset + 30
+            ),
+            Size = UDim2.new(0, 50, 0, 50)
+        }):Play()
+        
+        TweenService:Create(LogoButton, TweenInfo.new(0.4), {
+            Rotation = -360,
+            Size = UDim2.new(0, 70, 0, 70)
+        }):Play()
+        
+        wait(0.4)
+        
+        MainContainer.Visible = false
+        TweenService:Create(LogoButton, TweenInfo.new(0.3), {
+            Size = UDim2.new(0, 60, 0, 60),
+            Rotation = 0
+        }):Play()
+        
+        guiVisible = false
+        StatusLabel.Text = "Status: GUI Hidden with Bounce"
+    end
+
+    local function MakeDraggable(frame, dragHandle)
+        local dragStart = nil
+        local startPos = nil
+        
+        dragHandle.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragStart = input.Position
+                startPos = frame.Position
+                
+                local connection
+                connection = input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragStart = nil
+                        connection:Disconnect()
+                    end
+                end)
+            end
+        end)
+        
+        dragHandle.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement and dragStart then
+                local delta = input.Position - dragStart
+                frame.Position = UDim2.new(
+                    startPos.X.Scale, 
+                    startPos.X.Offset + delta.X, 
+                    startPos.Y.Scale, 
+                    startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+    end
+
+    local function MakeLogoDraggable(logo)
+        local dragStart = nil
+        local startPos = nil
+        
+        logo.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragStart = input.Position
+                startPos = logo.Position
+                
+                local connection
+                connection = input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragStart = nil
+                        connection:Disconnect()
+                    end
+                end)
+            end
+        end)
+        
+        logo.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement and dragStart then
+                local delta = input.Position - dragStart
+                logo.Position = UDim2.new(
+                    startPos.X.Scale, 
+                    startPos.X.Offset + delta.X, 
+                    startPos.Y.Scale, 
+                    startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+    end
+
+    local function ToggleGUI()
+        if guiVisible then
+            HideGUIWithBounce()
+        else
+            ShowGUIWithBounce()
+        end
+    end
+
+    MakeDraggable(MainContainer, TopBar)
+    MakeLogoDraggable(LogoButton)
+
+    LogoButton.MouseButton1Click:Connect(function()
+        ToggleGUI()
+    end)
+
+    CloseButton.MouseButton1Click:Connect(function()
+        ShowConfirmationDialog()
+    end)
+
+    YesButton.MouseButton1Click:Connect(function()
+        TweenService:Create(YesButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 110, 0, 35)
+        }):Play()
+        wait(0.1)
+        TweenService:Create(YesButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 120, 0, 40)
+        }):Play()
+        
+        wait(0.2)
+        HideConfirmationDialog()
+        wait(0.3)
+        CloseGUI()
+    end)
+
+    NoButton.MouseButton1Click:Connect(function()
+        TweenService:Create(NoButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 110, 0, 35)
+        }):Play()
+        wait(0.1)
+        TweenService:Create(NoButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 120, 0, 40)
+        }):Play()
+        
+        wait(0.2)
+        HideConfirmationDialog()
+    end)
+
+    MinimizeButton.MouseButton1Click:Connect(function()
+        ToggleGUI()
+    end)
+
+    local function UpdateClock()
+        while wait(1) do
+            local currentTime = os.date("%H:%M:%S")
+            TimeLabel.Text = currentTime
+        end
+    end
+
+    spawn(UpdateClock)
+
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "PURPLE HUB v6.0 Loaded!",
+        Text = "Fly Mode dengan Speed Control aktif!",
+        Duration = 5,
+    })
+
+    print("🎮 PURPLE HUB v6.0 BERHASIL DIMUAT!")
+    print("✈️  Fly Mode dengan Speed Slider terintegrasi")
+    print("👻  Invisibility Mode aktif")
+    print("🚫  No Clip Mode aktif")
+    print("✨  Bounce Animation + Drag System aktif")
+    
+    return ScreenGui
+end
+
+-- Execute GUI
+local success, result = pcall(CreateModernGUI)
+if success then
+    print("✅ PURPLE HUB v6.0 created successfully!")
+else
+    print("❌ Error creating GUI: " .. tostring(result))
+end
