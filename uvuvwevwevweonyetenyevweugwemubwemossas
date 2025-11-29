@@ -906,7 +906,6 @@ local function CreateModernGUI()
     -- Player Page dengan Fly Mode dan fitur lainnya
     if playerPage then
         CreateToggleSlider(playerPage, "Fly Mode", "✈️", false, true)
-        CreateToggleSlider(playerPage, "No Clip", "👻", false)
         CreateToggleSlider(playerPage, "Invisibility", "🌀", false)
         CreateToggleSlider(playerPage, "Speed Hack", "💨", false)
     end
