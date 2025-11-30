@@ -1,4 +1,2273 @@
---Thanks For Using This Script
---Here You Go
 
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/uvuvwevwevweonyetenyevweugwemubwemossas", true))()
+local player = game.Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local TS = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local char = player.Character or player.CharacterAdded:Wait()
+local hum = char:WaitForChild("Humanoid")
+local root = char:WaitForChild("HumanoidRootPart")
+
+local fly = false
+local invis = false
+local speedEnabled = false
+local jumpEnabled = false
+local noclipEnabled = false
+local espEnabled = false
+local xrayEnabled = false
+local fullbrightEnabled = false
+local speedValue = 60
+local jumpValue = 100
+local originalWalkSpeed = hum.WalkSpeed
+local originalJumpPower = hum.JumpPower
+local bg, bv
+
+-- MARKER SYSTEM VARIABLES (DITAMBAHKAN)
+local MARKER_COLORS = {
+    Color3.fromRGB(255, 0, 0),    -- Red
+    Color3.fromRGB(0, 255, 0),    -- Green
+    Color3.fromRGB(0, 0, 255),    -- Blue
+    Color3.fromRGB(255, 255, 0),  -- Yellow
+    Color3.fromRGB(255, 0, 255),  -- Magenta
+    Color3.fromRGB(0, 255, 255),  -- Cyan
+}
+
+local markers = {}
+local currentMarkerCount = 0
+local autoTeleportEnabled = false
+local currentTeleportIndex = 1
+
+-- MARKER SYSTEM FUNCTIONS (DITAMBAHKAN)
+local function createMarker(position, index)
+    local marker = {}
+    marker.index = index
+    marker.position = position
+    marker.timerValue = 3
+    marker.autoEnabled = false
+    
+    -- Create visual part
+    local part = Instance.new("Part")
+    part.Name = "Marker_" .. index
+    part.Size = Vector3.new(3, 0.2, 3)
+    part.Position = position + Vector3.new(0, 0.1, 0)
+    part.Anchored = true
+    part.CanCollide = false
+    part.Material = Enum.Material.Neon
+    part.Color = MARKER_COLORS[(index - 1) % #MARKER_COLORS + 1]
+    part.Parent = workspace
+    
+    -- Create light
+    local pointLight = Instance.new("PointLight")
+    pointLight.Brightness = 2
+    pointLight.Range = 12
+    pointLight.Color = part.Color
+    pointLight.Parent = part
+    
+    -- Create billboard gui
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 120, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 4, 0)
+    billboard.Adornee = part
+    billboard.Parent = part
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "Marker " .. index
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeTransparency = 0
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 16
+    label.Parent = billboard
+    
+    marker.part = part
+    markers[index] = marker
+    
+    return marker
+end
+
+local function teleportToMarker(index)
+    if markers[index] then
+        local character = player.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            character.HumanoidRootPart.CFrame = CFrame.new(markers[index].position + Vector3.new(0, 3, 0))
+        end
+    end
+end
+
+local function deleteMarker(index)
+    if markers[index] then
+        if markers[index].part then
+            markers[index].part:Destroy()
+        end
+        markers[index] = nil
+    end
+end
+
+local function clearAllMarkers()
+    for index, marker in pairs(markers) do
+        if marker.part then
+            marker.part:Destroy()
+        end
+    end
+    markers = {}
+    currentMarkerCount = 0
+end
+
+local function getSelectedMarkersSequence()
+    local selected = {}
+    for index, marker in pairs(markers) do
+        if marker.autoEnabled then
+            table.insert(selected, {index = index, timer = marker.timerValue})
+        end
+    end
+    
+    table.sort(selected, function(a, b) return a.index < b.index end)
+    return selected
+end
+
+local function startAutoTeleport()
+    if autoTeleportEnabled then return end
+    
+    local selectedMarkers = getSelectedMarkersSequence()
+    
+    if #selectedMarkers == 0 then
+        return "Error: No markers selected for Auto TP"
+    end
+    
+    autoTeleportEnabled = true
+    currentTeleportIndex = 1
+    
+    -- Gunakan coroutine untuk timing yang lebih akurat
+    local function autoTPLoop()
+        while autoTeleportEnabled do
+            local currentMarker = selectedMarkers[currentTeleportIndex]
+            
+            if not currentMarker or not markers[currentMarker.index] then
+                autoTeleportEnabled = false
+                break
+            end
+            
+            -- Teleport ke marker
+            teleportToMarker(currentMarker.index)
+            
+            -- Tunggu sesuai timer marker ini
+            local waitTime = currentMarker.timer
+            
+            -- Timing yang lebih akurat
+            local startTime = tick()
+            while autoTeleportEnabled and (tick() - startTime) < waitTime do
+                wait(0.1)
+            end
+            
+            if autoTeleportEnabled then
+                -- Pindah ke marker berikutnya
+                currentTeleportIndex = currentTeleportIndex + 1
+                if currentTeleportIndex > #selectedMarkers then
+                    currentTeleportIndex = 1 -- Loop kembali ke awal
+                end
+            end
+        end
+    end
+    
+    -- Jalankan loop di coroutine terpisah
+    coroutine.wrap(autoTPLoop)()
+    return "Auto TP Started with " .. #selectedMarkers .. " markers"
+end
+
+local function stopAutoTeleport()
+    autoTeleportEnabled = false
+    return "Auto TP Stopped"
+end
+
+local function toggleAutoTeleport()
+    if autoTeleportEnabled then
+        return stopAutoTeleport(), false
+    else
+        return startAutoTeleport(), true
+    end
+end
+
+-- Fly system functions
+local function startFly()
+    fly = true
+    bg = Instance.new("BodyGyro", root)
+    bg.P = 9e5
+    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+
+    bv = Instance.new("BodyVelocity", root)
+    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+
+    hum.PlatformStand = true
+end
+
+local function stopFly()
+    fly = false
+    hum.PlatformStand = false
+    if bg then bg:Destroy() end
+    if bv then bv:Destroy() end
+end
+
+-- Speed system functions
+local function startSpeed()
+    speedEnabled = true
+    originalWalkSpeed = hum.WalkSpeed
+    hum.WalkSpeed = speedValue
+end
+
+local function stopSpeed()
+    speedEnabled = false
+    hum.WalkSpeed = originalWalkSpeed
+end
+
+-- Jump system functions
+local function startJump()
+    jumpEnabled = true
+    originalJumpPower = hum.JumpPower
+    hum.JumpPower = jumpValue
+end
+
+local function stopJump()
+    jumpEnabled = false
+    hum.JumpPower = originalJumpPower
+end
+
+-- No Clip system
+local function startNoClip()
+    noclipEnabled = true
+    RS.Stepped:Connect(function()
+        if noclipEnabled and char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function stopNoClip()
+    noclipEnabled = false
+    if char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+-- ESP System
+local espObjects = {}
+local function createESP(targetPlayer)
+    local character = targetPlayer.Character
+    if not character then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Parent = character
+    highlight.Adornee = character
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    
+    espObjects[targetPlayer] = highlight
+end
+
+local function removeESP(targetPlayer)
+    if espObjects[targetPlayer] then
+        espObjects[targetPlayer]:Destroy()
+        espObjects[targetPlayer] = nil
+    end
+end
+
+local function toggleESP()
+    espEnabled = not espEnabled
+    
+    if espEnabled then
+        -- Add ESP to all players
+        for _, otherPlayer in pairs(game.Players:GetPlayers()) do
+            if otherPlayer ~= player then
+                createESP(otherPlayer)
+            end
+        end
+    else
+        -- Remove all ESP
+        for targetPlayer, highlight in pairs(espObjects) do
+            highlight:Destroy()
+        end
+        espObjects = {}
+    end
+    return "ESP: " .. (espEnabled and "ON" or "OFF")
+end
+
+-- X-Ray Vision
+local function toggleXRay()
+    xrayEnabled = not xrayEnabled
+    
+    if xrayEnabled then
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("BasePart") and part.Transparency < 0.5 then
+                part.LocalTransparencyModifier = 0.5
+            end
+        end
+    else
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.LocalTransparencyModifier = 0
+            end
+        end
+    end
+    return "X-Ray: " .. (xrayEnabled and "ON" or "OFF")
+end
+
+-- Full Bright
+local function toggleFullBright()
+    fullbrightEnabled = not fullbrightEnabled
+    
+    if fullbrightEnabled then
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.Brightness = 2
+        Lighting.GlobalShadows = false
+    else
+        Lighting.Ambient = Color3.new(0, 0, 0)
+        Lighting.Brightness = 1
+        Lighting.GlobalShadows = true
+    end
+    return "Full Bright: " .. (fullbrightEnabled and "ON" or "OFF")
+end
+
+-- Teleport to Player dengan Player List dan Search Real-time
+local function CreatePlayerListFrame(parent)
+    local playerListFrame = Instance.new("Frame")
+    playerListFrame.Name = "PlayerListFrame"
+    playerListFrame.Parent = parent
+    playerListFrame.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+    playerListFrame.BackgroundTransparency = 0.3
+    playerListFrame.BorderSizePixel = 0
+    playerListFrame.Size = UDim2.new(0, 480, 0, 300)
+    playerListFrame.ZIndex = 2
+    
+    local playerListCorner = Instance.new("UICorner")
+    playerListCorner.Parent = playerListFrame
+    playerListCorner.CornerRadius = UDim.new(0, 10)
+    
+    local playerListStroke = Instance.new("UIStroke")
+    playerListStroke.Parent = playerListFrame
+    playerListStroke.Color = Color3.fromRGB(100, 50, 150)
+    playerListStroke.Thickness = 2
+    playerListStroke.Transparency = 0.3
+
+    -- Search Box
+    local searchBox = Instance.new("TextBox")
+    searchBox.Name = "SearchBox"
+    searchBox.Parent = playerListFrame
+    searchBox.BackgroundColor3 = Color3.fromRGB(50, 0, 75)
+    searchBox.BackgroundTransparency = 0.2
+    searchBox.BorderSizePixel = 0
+    searchBox.Position = UDim2.new(0, 15, 0, 15)
+    searchBox.Size = UDim2.new(1, -30, 0, 40)
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.PlaceholderText = "🔍 Cari player..."
+    searchBox.Text = ""
+    searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    searchBox.TextSize = 14
+    searchBox.ZIndex = 3
+    
+    local searchCorner = Instance.new("UICorner")
+    searchCorner.Parent = searchBox
+    searchCorner.CornerRadius = UDim.new(0, 8)
+    
+    local searchPadding = Instance.new("UIPadding")
+    searchPadding.Parent = searchBox
+    searchPadding.PaddingLeft = UDim.new(0, 15)
+
+    -- Player List Scrolling Frame
+    local playerScrollFrame = Instance.new("ScrollingFrame")
+    playerScrollFrame.Name = "PlayerScrollFrame"
+    playerScrollFrame.Parent = playerListFrame
+    playerScrollFrame.Active = true
+    playerScrollFrame.BackgroundColor3 = Color3.fromRGB(35, 0, 50)
+    playerScrollFrame.BackgroundTransparency = 0.4
+    playerScrollFrame.BorderSizePixel = 0
+    playerScrollFrame.Position = UDim2.new(0, 15, 0, 70)
+    playerScrollFrame.Size = UDim2.new(1, -30, 1, -90)
+    playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    playerScrollFrame.ScrollBarThickness = 5
+    playerScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(120, 80, 180)
+    playerScrollFrame.ZIndex = 2
+    
+    local scrollCorner = Instance.new("UICorner")
+    scrollCorner.Parent = playerScrollFrame
+    scrollCorner.CornerRadius = UDim.new(0, 8)
+
+    local playerListLayout = Instance.new("UIListLayout")
+    playerListLayout.Parent = playerScrollFrame
+    playerListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    playerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    playerListLayout.Padding = UDim.new(0, 5)
+    
+    local playerListPadding = Instance.new("UIPadding")
+    playerListPadding.Parent = playerScrollFrame
+    playerListPadding.PaddingTop = UDim.new(0, 5)
+    playerListPadding.PaddingLeft = UDim.new(0, 5)
+    playerListPadding.PaddingRight = UDim.new(0, 5)
+
+    local function CreatePlayerButton(targetPlayer)
+        local playerButton = Instance.new("TextButton")
+        playerButton.Name = targetPlayer.Name
+        playerButton.Parent = playerScrollFrame
+        playerButton.BackgroundColor3 = Color3.fromRGB(60, 0, 90)
+        playerButton.BackgroundTransparency = 0.3
+        playerButton.BorderSizePixel = 0
+        playerButton.Size = UDim2.new(1, -10, 0, 50)
+        playerButton.Font = Enum.Font.Gotham
+        playerButton.Text = "👤 " .. targetPlayer.DisplayName .. " (@" .. targetPlayer.Name .. ")"
+        playerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        playerButton.TextSize = 12
+        playerButton.AutoButtonColor = true
+        playerButton.ZIndex = 3
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.Parent = playerButton
+        buttonCorner.CornerRadius = UDim.new(0, 8)
+        
+        local buttonStroke = Instance.new("UIStroke")
+        buttonStroke.Parent = playerButton
+        buttonStroke.Color = Color3.fromRGB(120, 80, 180)
+        buttonStroke.Thickness = 1
+        buttonStroke.Transparency = 0.3
+
+        playerButton.MouseButton1Click:Connect(function()
+            if targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                root.CFrame = targetPlayer.Character.HumanoidRootPart.CFrame
+            end
+        end)
+
+        return playerButton
+    end
+
+    local function UpdatePlayerList(searchText)
+        -- Clear existing buttons
+        for _, child in pairs(playerScrollFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+
+        -- Add filtered players
+        local playerCount = 0
+        for _, targetPlayer in pairs(game.Players:GetPlayers()) do
+            if targetPlayer ~= player then
+                local displayName = targetPlayer.DisplayName:lower()
+                local userName = targetPlayer.Name:lower()
+                local searchLower = searchText:lower()
+                
+                if searchText == "" or displayName:find(searchLower) or userName:find(searchLower) then
+                    CreatePlayerButton(targetPlayer)
+                    playerCount = playerCount + 1
+                end
+            end
+        end
+
+        -- Update canvas size based on number of players
+        playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, playerCount * 55)
+    end
+
+    -- Initial player list
+    UpdatePlayerList("")
+
+    -- Search functionality
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        UpdatePlayerList(searchBox.Text)
+    end)
+
+    -- Update player list when players join/leave
+    game.Players.PlayerAdded:Connect(function()
+        UpdatePlayerList(searchBox.Text)
+    end)
+
+    game.Players.PlayerRemoving:Connect(function()
+        UpdatePlayerList(searchBox.Text)
+    end)
+
+    return playerListFrame
+end
+
+-- Anti-AFK
+local function enableAntiAFK()
+    local VirtualUser = game:GetService("VirtualUser")
+    game:GetService("Players").LocalPlayer.Idled:connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+    return "Anti-AFK Enabled"
+end
+
+-- Fitur-fitur Misc baru
+local disable3DRendering = false
+local blackScreenEnabled = false
+local whiteScreenEnabled = false
+local disableNotificationEnabled = false
+
+local originalGraphicsQualityLevel = settings().Rendering.QualityLevel
+
+-- Disable 3D Rendering
+local function toggleDisable3DRendering()
+    disable3DRendering = not disable3DRendering
+    
+    if disable3DRendering then
+        settings().Rendering.QualityLevel = 1
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("Part") or part:IsA("MeshPart") then
+                part.Transparency = 1
+            end
+        end
+    else
+        settings().Rendering.QualityLevel = originalGraphicsQualityLevel
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("Part") or part:IsA("MeshPart") then
+                part.Transparency = 0
+            end
+        end
+    end
+    return "3D Rendering: " .. (disable3DRendering and "DISABLED" or "ENABLED")
+end
+
+-- Black Screen
+local blackScreenFrame = nil
+local function toggleBlackScreen()
+    blackScreenEnabled = not blackScreenEnabled
+    
+    if blackScreenEnabled then
+        -- Hentikan white screen jika aktif
+        if whiteScreenEnabled then
+            toggleWhiteScreen()
+        end
+        
+        blackScreenFrame = Instance.new("Frame")
+        blackScreenFrame.Name = "BlackScreen"
+        blackScreenFrame.Parent = game:GetService("CoreGui")
+        blackScreenFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+        blackScreenFrame.BackgroundTransparency = 0
+        blackScreenFrame.BorderSizePixel = 0
+        blackScreenFrame.Size = UDim2.new(1, 0, 1, 0)
+        blackScreenFrame.ZIndex = 999
+    else
+        if blackScreenFrame then
+            blackScreenFrame:Destroy()
+            blackScreenFrame = nil
+        end
+    end
+    return "Black Screen: " .. (blackScreenEnabled and "ON" or "OFF")
+end
+
+-- White Screen
+local whiteScreenFrame = nil
+local function toggleWhiteScreen()
+    whiteScreenEnabled = not whiteScreenEnabled
+    
+    if whiteScreenEnabled then
+        -- Hentikan black screen jika aktif
+        if blackScreenEnabled then
+            toggleBlackScreen()
+        end
+        
+        whiteScreenFrame = Instance.new("Frame")
+        whiteScreenFrame.Name = "WhiteScreen"
+        whiteScreenFrame.Parent = game:GetService("CoreGui")
+        whiteScreenFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+        whiteScreenFrame.BackgroundTransparency = 0
+        whiteScreenFrame.BorderSizePixel = 0
+        whiteScreenFrame.Size = UDim2.new(1, 0, 1, 0)
+        whiteScreenFrame.ZIndex = 999
+    else
+        if whiteScreenFrame then
+            whiteScreenFrame:Destroy()
+            whiteScreenFrame = nil
+        end
+    end
+    return "White Screen: " .. (whiteScreenEnabled and "ON" or "OFF")
+end
+
+-- Disable Notification
+local function toggleDisableNotification()
+    disableNotificationEnabled = not disableNotificationEnabled
+    return "Notifications: " .. (disableNotificationEnabled and "DISABLED" or "ENABLED")
+end
+
+-- Invisibility function
+local function toggleInvisibility()
+    invis = not invis
+    for _, p in pairs(char:GetDescendants()) do
+        if p:IsA("BasePart") or p:IsA("MeshPart") then
+            p.Transparency = invis and 1 or 0
+        end
+    end
+    return "Invisibility: " .. (invis and "ON" or "OFF")
+end
+
+-- Fly movement
+RS.RenderStepped:Connect(function()
+    if fly then
+        local cam = workspace.CurrentCamera
+        local m = Vector3.new()
+
+        if UIS:IsKeyDown(Enum.KeyCode.W) then m += cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then m -= cam.CFrame.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then m -= cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then m += cam.CFrame.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then m += Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then m -= Vector3.new(0,1,0) end
+
+        if m.Magnitude > 0 then m = m.Unit end
+        bv.Velocity = m * speedValue
+        bg.CFrame = cam.CFrame
+    end
+end)
+
+-- Update speed value when changed
+RS.RenderStepped:Connect(function()
+    if speedEnabled then
+        hum.WalkSpeed = speedValue
+    end
+end)
+
+-- Character added event
+player.CharacterAdded:Connect(function(character)
+    char = character
+    hum = character:WaitForChild("Humanoid")
+    root = character:WaitForChild("HumanoidRootPart")
+    originalWalkSpeed = hum.WalkSpeed
+    originalJumpPower = hum.JumpPower
+    
+    -- Reapply effects if they were enabled
+    if invis then
+        toggleInvisibility()
+    end
+    if speedEnabled then
+        hum.WalkSpeed = speedValue
+    end
+    if jumpEnabled then
+        hum.JumpPower = jumpValue
+    end
+end)
+
+-- MODERN GUI CREATION DENGAN MARKER SYSTEM (GUI TIDAK DIUBAH, HANYA DITAMBAH MARKER SYSTEM)
+local function CreateModernGUI()
+    local ScreenGui = Instance.new("ScreenGui")
+    local MainContainer = Instance.new("Frame")
+    local LogoButton = Instance.new("TextButton")
+    local MainFrame = Instance.new("Frame")
+    local TopBar = Instance.new("Frame")
+    local Title = Instance.new("TextLabel")
+    local CloseButton = Instance.new("TextButton")
+    local MinimizeButton = Instance.new("TextButton")
+    local TabButtonsFrame = Instance.new("Frame")
+    local PagesFolder = Instance.new("Folder")
+    local BottomBar = Instance.new("Frame")
+    local StatusLabel = Instance.new("TextLabel")
+    local TimeLabel = Instance.new("TextLabel")
+    
+    local ConfirmationOverlay = Instance.new("Frame")
+    local ConfirmationDialog = Instance.new("Frame")
+    local DialogTitle = Instance.new("TextLabel")
+    local DialogMessage = Instance.new("TextLabel")
+    local YesButton = Instance.new("TextButton")
+    local NoButton = Instance.new("TextButton")
+    local ButtonContainer = Instance.new("Frame")
+    
+    ScreenGui.Parent = game:GetService("CoreGui")
+    ScreenGui.Name = "ModernPurpleHub"
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.ResetOnSpawn = false
+
+    MainContainer.Name = "MainContainer"
+    MainContainer.Parent = ScreenGui
+    MainContainer.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+    MainContainer.BackgroundTransparency = 0.8
+    MainContainer.BorderSizePixel = 0
+    MainContainer.Position = UDim2.new(0.3, 0, 0.2, 0)
+    MainContainer.Size = UDim2.new(0, 650, 0, 500)
+    MainContainer.Visible = false
+    
+    local MainContainerCorner = Instance.new("UICorner")
+    MainContainerCorner.Parent = MainContainer
+    MainContainerCorner.CornerRadius = UDim.new(0, 15)
+
+    MainFrame.Name = "MainFrame"
+    MainFrame.Parent = MainContainer
+    MainFrame.BackgroundColor3 = Color3.fromRGB(25, 0, 40)
+    MainFrame.BackgroundTransparency = 0.3
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Size = UDim2.new(1, 0, 1, 0)
+    MainFrame.ClipsDescendants = true
+    
+    local MainFrameCorner = Instance.new("UICorner")
+    MainFrameCorner.Parent = MainFrame
+    MainFrameCorner.CornerRadius = UDim.new(0, 12)
+
+    TopBar.Name = "TopBar"
+    TopBar.Parent = MainFrame
+    TopBar.BackgroundColor3 = Color3.fromRGB(35, 0, 55)
+    TopBar.BackgroundTransparency = 0.4
+    TopBar.BorderSizePixel = 0
+    TopBar.Size = UDim2.new(1, 0, 0, 40)
+    TopBar.Active = true
+    
+    local TopBarCorner = Instance.new("UICorner")
+    TopBarCorner.Parent = TopBar
+    TopBarCorner.CornerRadius = UDim.new(0, 12)
+
+    Title.Name = "Title"
+    Title.Parent = TopBar
+    Title.BackgroundTransparency = 1
+    Title.Position = UDim2.new(0, 15, 0, 0)
+    Title.Size = UDim2.new(0, 200, 1, 0)
+    Title.Font = Enum.Font.GothamBold
+    Title.Text = "PURPLE HUB v6.0"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextSize = 16
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local TextStroke = Instance.new("UIStroke")
+    TextStroke.Parent = Title
+    TextStroke.Color = Color3.fromRGB(180, 100, 255)
+    TextStroke.Thickness = 1
+    TextStroke.Transparency = 0.5
+
+    CloseButton.Name = "CloseButton"
+    CloseButton.Parent = TopBar
+    CloseButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    CloseButton.BorderSizePixel = 0
+    CloseButton.Position = UDim2.new(1, -40, 0.5, -15)
+    CloseButton.Size = UDim2.new(0, 30, 0, 30)
+    CloseButton.Font = Enum.Font.GothamBold
+    CloseButton.Text = "X"
+    CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CloseButton.TextSize = 14
+    CloseButton.ZIndex = 2
+    CloseButton.AutoButtonColor = true
+    
+    local CloseCorner = Instance.new("UICorner")
+    CloseCorner.Parent = CloseButton
+    CloseCorner.CornerRadius = UDim.new(0, 6)
+
+    MinimizeButton.Name = "MinimizeButton"
+    MinimizeButton.Parent = TopBar
+    MinimizeButton.BackgroundColor3 = Color3.fromRGB(100, 100, 255)
+    MinimizeButton.BorderSizePixel = 0
+    MinimizeButton.Position = UDim2.new(1, -80, 0.5, -15)
+    MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+    MinimizeButton.Font = Enum.Font.GothamBold
+    MinimizeButton.Text = "_"
+    MinimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    MinimizeButton.TextSize = 14
+    MinimizeButton.ZIndex = 2
+    MinimizeButton.AutoButtonColor = true
+    
+    local MinimizeCorner = Instance.new("UICorner")
+    MinimizeCorner.Parent = MinimizeButton
+    MinimizeCorner.CornerRadius = UDim.new(0, 6)
+
+    TabButtonsFrame.Name = "TabButtonsFrame"
+    TabButtonsFrame.Parent = MainFrame
+    TabButtonsFrame.BackgroundColor3 = Color3.fromRGB(30, 0, 45)
+    TabButtonsFrame.BackgroundTransparency = 0.4
+    TabButtonsFrame.BorderSizePixel = 0
+    TabButtonsFrame.Position = UDim2.new(0, 0, 0, 40)
+    TabButtonsFrame.Size = UDim2.new(0, 150, 0, 420)
+    
+    local TabButtonsCorner = Instance.new("UICorner")
+    TabButtonsCorner.Parent = TabButtonsFrame
+    TabButtonsCorner.CornerRadius = UDim.new(0, 12)
+
+    PagesFolder.Name = "PagesFolder"
+    PagesFolder.Parent = MainFrame
+
+    BottomBar.Name = "BottomBar"
+    BottomBar.Parent = MainFrame
+    BottomBar.BackgroundColor3 = Color3.fromRGB(30, 0, 45)
+    BottomBar.BackgroundTransparency = 0.4
+    BottomBar.BorderSizePixel = 0
+    BottomBar.Position = UDim2.new(0, 0, 1, -40)
+    BottomBar.Size = UDim2.new(1, 0, 0, 40)
+    
+    local BottomBarCorner = Instance.new("UICorner")
+    BottomBarCorner.Parent = BottomBar
+    BottomBarCorner.CornerRadius = UDim.new(0, 12)
+
+    StatusLabel.Name = "StatusLabel"
+    StatusLabel.Parent = BottomBar
+    StatusLabel.BackgroundTransparency = 1
+    StatusLabel.Position = UDim2.new(0, 15, 0, 0)
+    StatusLabel.Size = UDim2.new(0, 200, 1, 0)
+    StatusLabel.Font = Enum.Font.Gotham
+    StatusLabel.Text = "Status: Ready"
+    StatusLabel.TextColor3 = Color3.fromRGB(220, 180, 255)
+    StatusLabel.TextSize = 12
+    StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+    TimeLabel.Name = "TimeLabel"
+    TimeLabel.Parent = BottomBar
+    TimeLabel.BackgroundTransparency = 1
+    TimeLabel.Position = UDim2.new(1, -215, 0, 0)
+    TimeLabel.Size = UDim2.new(0, 200, 1, 0)
+    TimeLabel.Font = Enum.Font.Gotham
+    TimeLabel.Text = "00:00:00"
+    TimeLabel.TextColor3 = Color3.fromRGB(220, 180, 255)
+    TimeLabel.TextSize = 12
+    TimeLabel.TextXAlignment = Enum.TextXAlignment.Right
+
+    LogoButton.Name = "LogoButton"
+    LogoButton.Parent = ScreenGui
+    LogoButton.BackgroundColor3 = Color3.fromRGB(80, 0, 120)
+    LogoButton.BackgroundTransparency = 0.3
+    LogoButton.Position = UDim2.new(0, 20, 0, 20)
+    LogoButton.Size = UDim2.new(0, 60, 0, 60)
+    LogoButton.Font = Enum.Font.GothamBold
+    LogoButton.Text = "🎮"
+    LogoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LogoButton.TextSize = 24
+    LogoButton.AutoButtonColor = true
+    LogoButton.ZIndex = 10
+    LogoButton.Active = true
+    
+    local LogoCorner = Instance.new("UICorner")
+    LogoCorner.Parent = LogoButton
+    LogoCorner.CornerRadius = UDim.new(0, 15)
+    
+    local LogoGlow = Instance.new("UIStroke")
+    LogoGlow.Parent = LogoButton
+    LogoGlow.Color = Color3.fromRGB(150, 100, 255)
+    LogoGlow.Thickness = 3
+    LogoGlow.Transparency = 0.3
+
+    ConfirmationOverlay.Name = "ConfirmationOverlay"
+    ConfirmationOverlay.Parent = ScreenGui
+    ConfirmationOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    ConfirmationOverlay.BackgroundTransparency = 0.7
+    ConfirmationOverlay.BorderSizePixel = 0
+    ConfirmationOverlay.Size = UDim2.new(1, 0, 1, 0)
+    ConfirmationOverlay.Visible = false
+    ConfirmationOverlay.ZIndex = 20
+
+    ConfirmationDialog.Name = "ConfirmationDialog"
+    ConfirmationDialog.Parent = ConfirmationOverlay
+    ConfirmationDialog.BackgroundColor3 = Color3.fromRGB(35, 0, 55)
+    ConfirmationDialog.BackgroundTransparency = 0.1
+    ConfirmationDialog.BorderSizePixel = 0
+    ConfirmationDialog.Position = UDim2.new(0.5, -175, 0.5, -100)
+    ConfirmationDialog.Size = UDim2.new(0, 350, 0, 200)
+    ConfirmationDialog.ZIndex = 21
+    
+    local DialogCorner = Instance.new("UICorner")
+    DialogCorner.Parent = ConfirmationDialog
+    DialogCorner.CornerRadius = UDim.new(0, 15)
+    
+    local DialogStroke = Instance.new("UIStroke")
+    DialogStroke.Parent = ConfirmationDialog
+    DialogStroke.Color = Color3.fromRGB(120, 80, 200)
+    DialogStroke.Thickness = 3
+    DialogStroke.Transparency = 0.2
+
+    DialogTitle.Name = "DialogTitle"
+    DialogTitle.Parent = ConfirmationDialog
+    DialogTitle.BackgroundTransparency = 1
+    DialogTitle.Position = UDim2.new(0, 0, 0, 20)
+    DialogTitle.Size = UDim2.new(1, 0, 0, 40)
+    DialogTitle.Font = Enum.Font.GothamBold
+    DialogTitle.Text = "⚠️ KONFIRMASI PENUTUPAN ⚠️"
+    DialogTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    DialogTitle.TextSize = 18
+    DialogTitle.TextXAlignment = Enum.TextXAlignment.Center
+    DialogTitle.ZIndex = 22
+    
+    local TitleStroke = Instance.new("UIStroke")
+    TitleStroke.Parent = DialogTitle
+    TitleStroke.Color = Color3.fromRGB(255, 200, 100)
+    TitleStroke.Thickness = 2
+    TitleStroke.Transparency = 0.3
+
+    DialogMessage.Name = "DialogMessage"
+    DialogMessage.Parent = ConfirmationDialog
+    DialogMessage.BackgroundTransparency = 1
+    DialogMessage.Position = UDim2.new(0, 20, 0, 70)
+    DialogMessage.Size = UDim2.new(1, -40, 0, 50)
+    DialogMessage.Font = Enum.Font.Gotham
+    DialogMessage.Text = "Ini Akan Menutup GUI\nApakah Anda Yakin?"
+    DialogMessage.TextColor3 = Color3.fromRGB(220, 200, 255)
+    DialogMessage.TextSize = 14
+    DialogMessage.TextXAlignment = Enum.TextXAlignment.Center
+    DialogMessage.TextYAlignment = Enum.TextYAlignment.Center
+    DialogMessage.TextWrapped = true
+    DialogMessage.ZIndex = 22
+
+    ButtonContainer.Name = "ButtonContainer"
+    ButtonContainer.Parent = ConfirmationDialog
+    ButtonContainer.BackgroundTransparency = 1
+    ButtonContainer.Position = UDim2.new(0, 40, 0, 140)
+    ButtonContainer.Size = UDim2.new(1, -80, 0, 40)
+    ButtonContainer.ZIndex = 22
+
+    YesButton.Name = "YesButton"
+    YesButton.Parent = ButtonContainer
+    YesButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+    YesButton.BorderSizePixel = 0
+    YesButton.Position = UDim2.new(0, 0, 0, 0)
+    YesButton.Size = UDim2.new(0, 120, 0, 40)
+    YesButton.Font = Enum.Font.GothamBold
+    YesButton.Text = "✅ YA"
+    YesButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    YesButton.TextSize = 14
+    YesButton.ZIndex = 23
+    YesButton.AutoButtonColor = true
+    
+    local YesCorner = Instance.new("UICorner")
+    YesCorner.Parent = YesButton
+    YesCorner.CornerRadius = UDim.new(0, 8)
+    
+    local YesStroke = Instance.new("UIStroke")
+    YesStroke.Parent = YesButton
+    YesStroke.Color = Color3.fromRGB(255, 120, 120)
+    YesStroke.Thickness = 2
+
+    NoButton.Name = "NoButton"
+    NoButton.Parent = ButtonContainer
+    NoButton.BackgroundColor3 = Color3.fromRGB(80, 180, 80)
+    NoButton.BorderSizePixel = 0
+    NoButton.Position = UDim2.new(1, -120, 0, 0)
+    NoButton.Size = UDim2.new(0, 120, 0, 40)
+    NoButton.Font = Enum.Font.GothamBold
+    NoButton.Text = "❌ TIDAK"
+    NoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NoButton.TextSize = 14
+    NoButton.ZIndex = 23
+    NoButton.AutoButtonColor = true
+    
+    local NoCorner = Instance.new("UICorner")
+    NoCorner.Parent = NoButton
+    NoCorner.CornerRadius = UDim.new(0, 8)
+    
+    local NoStroke = Instance.new("UIStroke")
+    NoStroke.Parent = NoButton
+    NoStroke.Color = Color3.fromRGB(120, 220, 120)
+    NoStroke.Thickness = 2
+
+    -- Create tabs - TIDAK DIUBAH
+    local tabs = {
+        {Name = "Home", Icon = "🔮"},
+        {Name = "Player", Icon = "👤"}, 
+        {Name = "Visuals", Icon = "👁️"},
+        {Name = "Misc", Icon = "🔧"},
+        {Name = "Teleport", Icon = "🚀"},
+        {Name = "Settings", Icon = "⚙️"}
+    }
+
+    local currentPage = nil
+    local buttons = {}
+    local guiVisible = false
+
+    for i, tabData in pairs(tabs) do
+        local tabButton = Instance.new("TextButton")
+        tabButton.Name = tabData.Name .. "Button"
+        tabButton.Parent = TabButtonsFrame
+        tabButton.BackgroundColor3 = Color3.fromRGB(50, 0, 75)
+        tabButton.BackgroundTransparency = 0.3
+        tabButton.BorderSizePixel = 0
+        tabButton.Position = UDim2.new(0, 10, 0, 10 + ((i-1) * 50))
+        tabButton.Size = UDim2.new(0, 130, 0, 45)
+        tabButton.Font = Enum.Font.GothamBold
+        tabButton.Text = "   " .. tabData.Icon .. "  " .. tabData.Name
+        tabButton.TextColor3 = Color3.fromRGB(230, 200, 255)
+        tabButton.TextSize = 12
+        tabButton.TextXAlignment = Enum.TextXAlignment.Left
+        tabButton.AutoButtonColor = true
+        tabButton.ZIndex = 2
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.Parent = tabButton
+        buttonCorner.CornerRadius = UDim.new(0, 8)
+        
+        local buttonStroke = Instance.new("UIStroke")
+        buttonStroke.Parent = tabButton
+        buttonStroke.Color = Color3.fromRGB(100, 50, 150)
+        buttonStroke.Thickness = 1
+        buttonStroke.Transparency = 0.3
+
+        local pageFrame = Instance.new("ScrollingFrame")
+        pageFrame.Name = tabData.Name .. "Page"
+        pageFrame.Parent = PagesFolder
+        pageFrame.Active = true
+        pageFrame.BackgroundColor3 = Color3.fromRGB(25, 0, 40)
+        pageFrame.BackgroundTransparency = 0.3
+        pageFrame.BorderSizePixel = 0
+        pageFrame.Position = UDim2.new(0, 150, 0, 40)
+        pageFrame.Size = UDim2.new(0, 500, 0, 420)
+        pageFrame.CanvasSize = UDim2.new(0, 0, 0, 1000)
+        pageFrame.ScrollBarThickness = 3
+        pageFrame.ScrollBarImageColor3 = Color3.fromRGB(120, 80, 180)
+        pageFrame.Visible = false
+        pageFrame.ZIndex = 1
+        
+        local pageCorner = Instance.new("UICorner")
+        pageCorner.Parent = pageFrame
+        pageCorner.CornerRadius = UDim.new(0, 12)
+        
+        local uiListLayout = Instance.new("UIListLayout")
+        uiListLayout.Parent = pageFrame
+        uiListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        uiListLayout.Padding = UDim.new(0, 10)
+        
+        local uiPadding = Instance.new("UIPadding")
+        uiPadding.Parent = pageFrame
+        uiPadding.PaddingTop = UDim.new(0, 10)
+        uiPadding.PaddingLeft = UDim.new(0, 10)
+        uiPadding.PaddingRight = UDim.new(0, 10)
+
+        tabButton.MouseButton1Click:Connect(function()
+            if currentPage then
+                currentPage.Visible = false
+                buttons[currentPage.Name].BackgroundColor3 = Color3.fromRGB(50, 0, 75)
+            end
+            pageFrame.Visible = true
+            tabButton.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
+            currentPage = pageFrame
+            StatusLabel.Text = "Status: " .. tabData.Name .. " Tab Selected"
+        end)
+
+        buttons[pageFrame.Name] = tabButton
+        
+        if i == 1 then
+            pageFrame.Visible = true
+            tabButton.BackgroundColor3 = Color3.fromRGB(100, 0, 200)
+            currentPage = pageFrame
+        end
+    end
+
+    -- Function untuk buat marker system frame (DITAMBAHKAN)
+    local function CreateMarkerSystemFrame(parent)
+        local markerFrame = Instance.new("Frame")
+        markerFrame.Name = "MarkerSystemFrame"
+        markerFrame.Parent = parent
+        markerFrame.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+        markerFrame.BackgroundTransparency = 0.3
+        markerFrame.BorderSizePixel = 0
+        markerFrame.Size = UDim2.new(0, 480, 0, 400)
+        markerFrame.ZIndex = 2
+        
+        local markerCorner = Instance.new("UICorner")
+        markerCorner.Parent = markerFrame
+        markerCorner.CornerRadius = UDim.new(0, 12)
+        
+        local markerStroke = Instance.new("UIStroke")
+        markerStroke.Parent = markerFrame
+        markerStroke.Color = Color3.fromRGB(100, 50, 150)
+        markerStroke.Thickness = 2
+        markerStroke.Transparency = 0.3
+
+        -- Title
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Name = "MarkerTitle"
+        titleLabel.Parent = markerFrame
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Position = UDim2.new(0, 15, 0, 15)
+        titleLabel.Size = UDim2.new(1, -30, 0, 30)
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.Text = "📍 MARKER SYSTEM"
+        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLabel.TextSize = 16
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+        titleLabel.ZIndex = 3
+
+        -- Add Marker Button
+        local addMarkerButton = Instance.new("TextButton")
+        addMarkerButton.Name = "AddMarkerButton"
+        addMarkerButton.Parent = markerFrame
+        addMarkerButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+        addMarkerButton.BackgroundTransparency = 0.2
+        addMarkerButton.BorderSizePixel = 0
+        addMarkerButton.Position = UDim2.new(0, 15, 0, 60)
+        addMarkerButton.Size = UDim2.new(0, 220, 0, 40)
+        addMarkerButton.Font = Enum.Font.GothamBold
+        addMarkerButton.Text = "📍 Add Marker"
+        addMarkerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        addMarkerButton.TextSize = 14
+        addMarkerButton.AutoButtonColor = true
+        addMarkerButton.ZIndex = 3
+        
+        local addMarkerCorner = Instance.new("UICorner")
+        addMarkerCorner.Parent = addMarkerButton
+        addMarkerCorner.CornerRadius = UDim.new(0, 8)
+        
+        local addMarkerStroke = Instance.new("UIStroke")
+        addMarkerStroke.Parent = addMarkerButton
+        addMarkerStroke.Color = Color3.fromRGB(50, 150, 255)
+        addMarkerStroke.Thickness = 2
+
+        -- Clear All Button
+        local clearAllButton = Instance.new("TextButton")
+        clearAllButton.Name = "ClearAllButton"
+        clearAllButton.Parent = markerFrame
+        clearAllButton.BackgroundColor3 = Color3.fromRGB(255, 80, 80)
+        clearAllButton.BackgroundTransparency = 0.2
+        clearAllButton.BorderSizePixel = 0
+        clearAllButton.Position = UDim2.new(0, 245, 0, 60)
+        clearAllButton.Size = UDim2.new(0, 220, 0, 40)
+        clearAllButton.Font = Enum.Font.GothamBold
+        clearAllButton.Text = "🗑️ Clear All"
+        clearAllButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        clearAllButton.TextSize = 14
+        clearAllButton.AutoButtonColor = true
+        clearAllButton.ZIndex = 3
+        
+        local clearAllCorner = Instance.new("UICorner")
+        clearAllCorner.Parent = clearAllButton
+        clearAllCorner.CornerRadius = UDim.new(0, 8)
+        
+        local clearAllStroke = Instance.new("UIStroke")
+        clearAllStroke.Parent = clearAllButton
+        clearAllStroke.Color = Color3.fromRGB(255, 120, 120)
+        clearAllStroke.Thickness = 2
+
+        -- Single Auto TP Button
+        local autoTPButton = Instance.new("TextButton")
+        autoTPButton.Name = "AutoTPButton"
+        autoTPButton.Parent = markerFrame
+        autoTPButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60) -- Merah saat OFF
+        autoTPButton.BackgroundTransparency = 0.2
+        autoTPButton.BorderSizePixel = 0
+        autoTPButton.Position = UDim2.new(0, 15, 0, 115)
+        autoTPButton.Size = UDim2.new(0, 450, 0, 40)
+        autoTPButton.Font = Enum.Font.GothamBold
+        autoTPButton.Text = "⏹️ AUTO TP: OFF"
+        autoTPButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        autoTPButton.TextSize = 14
+        autoTPButton.AutoButtonColor = true
+        autoTPButton.ZIndex = 3
+        
+        local autoTPCorner = Instance.new("UICorner")
+        autoTPCorner.Parent = autoTPButton
+        autoTPCorner.CornerRadius = UDim.new(0, 8)
+        
+        local autoTPStroke = Instance.new("UIStroke")
+        autoTPStroke.Parent = autoTPButton
+        autoTPStroke.Color = Color3.fromRGB(255, 100, 100)
+        autoTPStroke.Thickness = 2
+
+        -- Markers List
+        local markersScrollFrame = Instance.new("ScrollingFrame")
+        markersScrollFrame.Name = "MarkersScrollFrame"
+        markersScrollFrame.Parent = markerFrame
+        markersScrollFrame.Active = true
+        markersScrollFrame.BackgroundColor3 = Color3.fromRGB(35, 0, 50)
+        markersScrollFrame.BackgroundTransparency = 0.4
+        markersScrollFrame.BorderSizePixel = 0
+        markersScrollFrame.Position = UDim2.new(0, 15, 0, 170)
+        markersScrollFrame.Size = UDim2.new(0, 450, 0, 215)
+        markersScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+        markersScrollFrame.ScrollBarThickness = 5
+        markersScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(120, 80, 180)
+        markersScrollFrame.ZIndex = 2
+        
+        local scrollCorner = Instance.new("UICorner")
+        scrollCorner.Parent = markersScrollFrame
+        scrollCorner.CornerRadius = UDim.new(0, 8)
+
+        local markersLayout = Instance.new("UIListLayout")
+        markersLayout.Parent = markersScrollFrame
+        markersLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        markersLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        markersLayout.Padding = UDim.new(0, 5)
+
+        -- Function to update markers list
+        local function UpdateMarkersList()
+            -- Clear existing markers
+            for _, child in pairs(markersScrollFrame:GetChildren()) do
+                if child:IsA("Frame") then
+                    child:Destroy()
+                end
+            end
+
+            -- Add current markers
+            local markerCount = 0
+            for index, marker in pairs(markers) do
+                local markerItem = Instance.new("Frame")
+                markerItem.Name = "MarkerItem_" .. index
+                markerItem.Parent = markersScrollFrame
+                markerItem.BackgroundColor3 = Color3.fromRGB(60, 0, 90)
+                markerItem.BackgroundTransparency = 0.3
+                markerItem.BorderSizePixel = 0
+                markerItem.Size = UDim2.new(1, -10, 0, 50)
+                markerItem.ZIndex = 3
+                
+                local itemCorner = Instance.new("UICorner")
+                itemCorner.Parent = markerItem
+                itemCorner.CornerRadius = UDim.new(0, 6)
+                
+                local itemStroke = Instance.new("UIStroke")
+                itemStroke.Parent = markerItem
+                itemStroke.Color = Color3.fromRGB(100, 50, 150)
+                itemStroke.Thickness = 1
+                itemStroke.Transparency = 0.3
+
+                -- Marker info
+                local markerLabel = Instance.new("TextLabel")
+                markerLabel.Parent = markerItem
+                markerLabel.BackgroundTransparency = 1
+                markerLabel.Position = UDim2.new(0, 10, 0, 5)
+                markerLabel.Size = UDim2.new(0, 120, 0, 15)
+                markerLabel.Font = Enum.Font.GothamBold
+                markerLabel.Text = "📍 Marker " .. index
+                markerLabel.TextColor3 = MARKER_COLORS[(index - 1) % #MARKER_COLORS + 1]
+                markerLabel.TextSize = 12
+                markerLabel.TextXAlignment = Enum.TextXAlignment.Left
+                markerLabel.ZIndex = 4
+
+                -- Timer Input
+                local timerBox = Instance.new("TextBox")
+                timerBox.Name = "TimerBox_" .. index
+                timerBox.Parent = markerItem
+                timerBox.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+                timerBox.BackgroundTransparency = 0.2
+                timerBox.BorderSizePixel = 0
+                timerBox.Position = UDim2.new(0, 10, 0, 25)
+                timerBox.Size = UDim2.new(0, 60, 0, 20)
+                timerBox.Font = Enum.Font.Gotham
+                timerBox.PlaceholderText = "3"
+                timerBox.Text = tostring(marker.timerValue)
+                timerBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+                timerBox.TextSize = 11
+                timerBox.ZIndex = 4
+                
+                local timerCorner = Instance.new("UICorner")
+                timerCorner.Parent = timerBox
+                timerCorner.CornerRadius = UDim.new(0, 4)
+                
+                local timerStroke = Instance.new("UIStroke")
+                timerStroke.Parent = timerBox
+                timerStroke.Color = Color3.fromRGB(80, 40, 120)
+                timerStroke.Thickness = 1
+
+                local timerLabel = Instance.new("TextLabel")
+                timerLabel.Parent = markerItem
+                timerLabel.BackgroundTransparency = 1
+                timerLabel.Position = UDim2.new(0, 75, 0, 25)
+                timerLabel.Size = UDim2.new(0, 30, 0, 20)
+                timerLabel.Font = Enum.Font.Gotham
+                timerLabel.Text = "sec"
+                timerLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+                timerLabel.TextSize = 10
+                timerLabel.TextXAlignment = Enum.TextXAlignment.Left
+                timerLabel.ZIndex = 4
+
+                -- TP Button
+                local tpButton = Instance.new("TextButton")
+                tpButton.Parent = markerItem
+                tpButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+                tpButton.BorderSizePixel = 0
+                tpButton.Position = UDim2.new(0, 120, 0, 10)
+                tpButton.Size = UDim2.new(0, 40, 0, 15)
+                tpButton.Font = Enum.Font.GothamBold
+                tpButton.Text = "TP"
+                tpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                tpButton.TextSize = 10
+                tpButton.AutoButtonColor = true
+                tpButton.ZIndex = 4
+                
+                local tpCorner = Instance.new("UICorner")
+                tpCorner.Parent = tpButton
+                tpCorner.CornerRadius = UDim.new(0, 4)
+                
+                local tpStroke = Instance.new("UIStroke")
+                tpStroke.Parent = tpButton
+                tpStroke.Color = Color3.fromRGB(50, 150, 255)
+                tpStroke.Thickness = 1
+
+                -- Delete Button
+                local delButton = Instance.new("TextButton")
+                delButton.Parent = markerItem
+                delButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+                delButton.BorderSizePixel = 0
+                delButton.Position = UDim2.new(0, 120, 0, 30)
+                delButton.Size = UDim2.new(0, 40, 0, 15)
+                delButton.Font = Enum.Font.GothamBold
+                delButton.Text = "DEL"
+                delButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                delButton.TextSize = 10
+                delButton.AutoButtonColor = true
+                delButton.ZIndex = 4
+                
+                local delCorner = Instance.new("UICorner")
+                delCorner.Parent = delButton
+                delCorner.CornerRadius = UDim.new(0, 4)
+                
+                local delStroke = Instance.new("UIStroke")
+                delStroke.Parent = delButton
+                delStroke.Color = Color3.fromRGB(255, 100, 100)
+                delStroke.Thickness = 1
+
+                -- Auto TP Toggle
+                local autoButton = Instance.new("TextButton")
+                autoButton.Name = "AutoButton_" .. index
+                autoButton.Parent = markerItem
+                autoButton.BackgroundColor3 = marker.autoEnabled and Color3.fromRGB(60, 255, 60) or Color3.fromRGB(255, 60, 60)
+                autoButton.BorderSizePixel = 0
+                autoButton.Position = UDim2.new(0, 170, 0, 10)
+                autoButton.Size = UDim2.new(0, 70, 0, 15)
+                autoButton.Font = Enum.Font.GothamBold
+                autoButton.Text = marker.autoEnabled and "AUTO: ON" or "AUTO: OFF"
+                autoButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+                autoButton.TextSize = 9
+                autoButton.AutoButtonColor = true
+                autoButton.ZIndex = 4
+                
+                local autoCorner = Instance.new("UICorner")
+                autoCorner.Parent = autoButton
+                autoCorner.CornerRadius = UDim.new(0, 4)
+                
+                local autoStroke = Instance.new("UIStroke")
+                autoStroke.Parent = autoButton
+                autoStroke.Color = marker.autoEnabled and Color3.fromRGB(100, 255, 100) or Color3.fromRGB(255, 100, 100)
+                autoStroke.Thickness = 1
+
+                -- Button events
+                tpButton.MouseButton1Click:Connect(function()
+                    teleportToMarker(index)
+                    StatusLabel.Text = "Teleported to Marker " .. index
+                end)
+
+                delButton.MouseButton1Click:Connect(function()
+                    deleteMarker(index)
+                    UpdateMarkersList()
+                    StatusLabel.Text = "Deleted Marker " .. index
+                end)
+
+                autoButton.MouseButton1Click:Connect(function()
+                    -- Hanya toggle marker ini, tidak mempengaruhi marker lain
+                    marker.autoEnabled = not marker.autoEnabled
+                    
+                    if marker.autoEnabled then
+                        autoButton.BackgroundColor3 = Color3.fromRGB(60, 255, 60)
+                        autoButton.Text = "AUTO: ON"
+                        autoStroke.Color = Color3.fromRGB(100, 255, 100)
+                        StatusLabel.Text = "Marker " .. index .. " added to Auto TP"
+                    else
+                        autoButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+                        autoButton.Text = "AUTO: OFF"
+                        autoStroke.Color = Color3.fromRGB(255, 100, 100)
+                        StatusLabel.Text = "Marker " .. index .. " removed from Auto TP"
+                    end
+                end)
+
+                -- Timer input event
+                timerBox.FocusLost:Connect(function(enterPressed)
+                    local newTime = tonumber(timerBox.Text)
+                    if newTime and newTime > 0 then
+                        marker.timerValue = newTime
+                        timerBox.Text = tostring(newTime)
+                        StatusLabel.Text = "Marker " .. index .. " timer set to " .. newTime .. "s"
+                    else
+                        timerBox.Text = tostring(marker.timerValue)
+                        StatusLabel.Text = "Invalid timer value"
+                    end
+                end)
+
+                markerCount = markerCount + 1
+            end
+
+            -- Update canvas size
+            markersScrollFrame.CanvasSize = UDim2.new(0, 0, 0, markerCount * 55)
+        end
+
+        -- Function to update Auto TP button appearance
+        local function updateAutoTPButton()
+            if autoTeleportEnabled then
+                autoTPButton.BackgroundColor3 = Color3.fromRGB(60, 180, 80) -- Hijau saat ON
+                autoTPButton.Text = "▶️ AUTO TP: ON"
+                autoTPStroke.Color = Color3.fromRGB(100, 220, 100)
+            else
+                autoTPButton.BackgroundColor3 = Color3.fromRGB(255, 60, 60) -- Merah saat OFF
+                autoTPButton.Text = "⏹️ AUTO TP: OFF"
+                autoTPStroke.Color = Color3.fromRGB(255, 100, 100)
+            end
+        end
+
+        -- Button events
+        addMarkerButton.MouseButton1Click:Connect(function()
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                currentMarkerCount = currentMarkerCount + 1
+                createMarker(character.HumanoidRootPart.Position, currentMarkerCount)
+                UpdateMarkersList()
+                StatusLabel.Text = "Created Marker " .. currentMarkerCount
+            else
+                StatusLabel.Text = "Error: Character not found"
+            end
+        end)
+
+        clearAllButton.MouseButton1Click:Connect(function()
+            clearAllMarkers()
+            UpdateMarkersList()
+            if autoTeleportEnabled then
+                stopAutoTeleport()
+                updateAutoTPButton()
+            end
+            StatusLabel.Text = "Cleared all markers"
+        end)
+
+        autoTPButton.MouseButton1Click:Connect(function()
+            local status, newState = toggleAutoTeleport()
+            StatusLabel.Text = status
+            updateAutoTPButton()
+        end)
+
+        -- Initial update
+        UpdateMarkersList()
+        updateAutoTPButton()
+
+        return markerFrame
+    end
+
+    -- Function to create welcome panel (TIDAK DIUBAH)
+    local function CreateWelcomePanel(parent)
+        local welcomeFrame = Instance.new("Frame")
+        welcomeFrame.Name = "WelcomePanel"
+        welcomeFrame.Parent = parent
+        welcomeFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 80)
+        welcomeFrame.BackgroundTransparency = 0.2
+        welcomeFrame.BorderSizePixel = 0
+        welcomeFrame.Size = UDim2.new(0, 480, 0, 180)
+        welcomeFrame.ZIndex = 2
+        
+        local welcomeCorner = Instance.new("UICorner")
+        welcomeCorner.Parent = welcomeFrame
+        welcomeCorner.CornerRadius = UDim.new(0, 12)
+        
+        local welcomeStroke = Instance.new("UIStroke")
+        welcomeStroke.Parent = welcomeFrame
+        welcomeStroke.Color = Color3.fromRGB(120, 80, 200)
+        welcomeStroke.Thickness = 3
+        welcomeStroke.Transparency = 0.2
+
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Name = "WelcomeTitle"
+        titleLabel.Parent = welcomeFrame
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Position = UDim2.new(0, 15, 0, 15)
+        titleLabel.Size = UDim2.new(0, 450, 0, 30)
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.Text = "🌟 WELCOME TO PURPLE HUB v6.0 🌟"
+        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLabel.TextSize = 16
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Center
+        titleLabel.ZIndex = 3
+        
+        local titleStroke = Instance.new("UIStroke")
+        titleStroke.Parent = titleLabel
+        titleStroke.Color = Color3.fromRGB(200, 150, 255)
+        titleStroke.Thickness = 1
+        titleStroke.Transparency = 0.3
+
+        local descLabel = Instance.new("TextLabel")
+        descLabel.Name = "WelcomeDesc"
+        descLabel.Parent = welcomeFrame
+        descLabel.BackgroundTransparency = 1
+        descLabel.Position = UDim2.new(0, 20, 0, 55)
+        descLabel.Size = UDim2.new(0, 440, 0, 80)
+        descLabel.Font = Enum.Font.Gotham
+        descLabel.Text = "Premium Roblox GUI dengan fitur lengkap dan animasi yang smooth.\n\n✨ Fitur Unggulan:\n• Fly Mode dengan Speed Control\n• Speed & Jump Boost dengan Slider\n• ESP, X-Ray, Full Bright\n• Teleport & Marker System\n• Anti-AFK & Banyak Lagi!"
+        descLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
+        descLabel.TextSize = 12
+        descLabel.TextXAlignment = Enum.TextXAlignment.Left
+        descLabel.TextYAlignment = Enum.TextYAlignment.Top
+        descLabel.TextWrapped = true
+        descLabel.ZIndex = 3
+
+        local tipsLabel = Instance.new("TextLabel")
+        tipsLabel.Name = "TipsLabel"
+        tipsLabel.Parent = welcomeFrame
+        tipsLabel.BackgroundTransparency = 1
+        tipsLabel.Position = UDim2.new(0, 20, 0, 145)
+        tipsLabel.Size = UDim2.new(0, 440, 0, 25)
+        tipsLabel.Font = Enum.Font.Gotham
+        tipsLabel.Text = "💡 Tips: Jelajahi semua tab untuk menemukan fitur-fitur keren!"
+        tipsLabel.TextColor3 = Color3.fromRGB(180, 150, 255)
+        tipsLabel.TextSize = 10
+        tipsLabel.TextXAlignment = Enum.TextXAlignment.Left
+        tipsLabel.ZIndex = 3
+
+        return welcomeFrame
+    end
+
+    -- Function to create feature card (TIDAK DIUBAH)
+    local function CreateFeatureCard(parent, title, description, icon)
+        local cardFrame = Instance.new("Frame")
+        cardFrame.Name = "FeatureCard"
+        cardFrame.Parent = parent
+        cardFrame.BackgroundColor3 = Color3.fromRGB(45, 0, 70)
+        cardFrame.BackgroundTransparency = 0.3
+        cardFrame.BorderSizePixel = 0
+        cardFrame.Size = UDim2.new(0, 480, 0, 80)
+        cardFrame.ZIndex = 2
+        
+        local cardCorner = Instance.new("UICorner")
+        cardCorner.Parent = cardFrame
+        cardCorner.CornerRadius = UDim.new(0, 10)
+        
+        local cardStroke = Instance.new("UIStroke")
+        cardStroke.Parent = cardFrame
+        cardStroke.Color = Color3.fromRGB(100, 50, 150)
+        cardStroke.Thickness = 2
+        cardStroke.Transparency = 0.3
+
+        local iconLabel = Instance.new("TextLabel")
+        iconLabel.Name = "CardIcon"
+        iconLabel.Parent = cardFrame
+        iconLabel.BackgroundTransparency = 1
+        iconLabel.Position = UDim2.new(0, 15, 0, 15)
+        iconLabel.Size = UDim2.new(0, 50, 0, 50)
+        iconLabel.Font = Enum.Font.GothamBold
+        iconLabel.Text = icon or "⭐"
+        iconLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        iconLabel.TextSize = 24
+        iconLabel.TextXAlignment = Enum.TextXAlignment.Center
+        iconLabel.ZIndex = 3
+
+        local titleLabel = Instance.new("TextLabel")
+        titleLabel.Name = "CardTitle"
+        titleLabel.Parent = cardFrame
+        titleLabel.BackgroundTransparency = 1
+        titleLabel.Position = UDim2.new(0, 80, 0, 15)
+        titleLabel.Size = UDim2.new(0, 380, 0, 25)
+        titleLabel.Font = Enum.Font.GothamBold
+        titleLabel.Text = title
+        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLabel.TextSize = 14
+        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+        titleLabel.ZIndex = 3
+
+        local descLabel = Instance.new("TextLabel")
+        descLabel.Name = "CardDesc"
+        descLabel.Parent = cardFrame
+        descLabel.BackgroundTransparency = 1
+        descLabel.Position = UDim2.new(0, 80, 0, 40)
+        descLabel.Size = UDim2.new(0, 380, 0, 30)
+        descLabel.Font = Enum.Font.Gotham
+        descLabel.Text = description
+        descLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
+        descLabel.TextSize = 11
+        descLabel.TextXAlignment = Enum.TextXAlignment.Left
+        descLabel.TextYAlignment = Enum.TextYAlignment.Top
+        descLabel.TextWrapped = true
+        descLabel.ZIndex = 3
+
+        return cardFrame
+    end
+
+    -- Function to create toggle with slider (TIDAK DIUBAH)
+    local function CreateToggleSlider(parent, text, icon, defaultValue, isFlyMode, isSpeedMode, isJumpMode)
+        local toggleFrame = Instance.new("Frame")
+        toggleFrame.Parent = parent
+        toggleFrame.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+        toggleFrame.BackgroundTransparency = 0.3
+        toggleFrame.BorderSizePixel = 0
+        toggleFrame.Size = UDim2.new(0, 480, 0, (isFlyMode or isSpeedMode or isJumpMode) and 100 or 60)
+        toggleFrame.ZIndex = 1
+        
+        local toggleCorner = Instance.new("UICorner")
+        toggleCorner.Parent = toggleFrame
+        toggleCorner.CornerRadius = UDim.new(0, 10)
+        
+        local toggleStroke = Instance.new("UIStroke")
+        toggleStroke.Parent = toggleFrame
+        toggleStroke.Color = Color3.fromRGB(100, 50, 150)
+        toggleStroke.Thickness = 2
+        toggleStroke.Transparency = 0.3
+
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Parent = toggleFrame
+        textLabel.BackgroundTransparency = 1
+        textLabel.Position = UDim2.new(0, 15, 0, 10)
+        textLabel.Size = UDim2.new(0, 300, 0, 25)
+        textLabel.Font = Enum.Font.GothamBold
+        textLabel.Text = "   " .. (icon or "⚡") .. "  " .. text
+        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        textLabel.TextSize = 14
+        textLabel.TextXAlignment = Enum.TextXAlignment.Left
+        textLabel.ZIndex = 2
+
+        local statusLabel = Instance.new("TextLabel")
+        statusLabel.Parent = toggleFrame
+        statusLabel.BackgroundTransparency = 1
+        statusLabel.Position = UDim2.new(0, 15, 0, 35)
+        statusLabel.Size = UDim2.new(0, 300, 0, 20)
+        statusLabel.Font = Enum.Font.Gotham
+        statusLabel.Text = "Status: OFF"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        statusLabel.TextSize = 11
+        statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+        statusLabel.ZIndex = 2
+
+        -- Slider container for Fly, Speed, Jump
+        local sliderContainer
+        local valueLabel
+        local sliderTrack
+        local sliderButton
+        
+        if isFlyMode or isSpeedMode or isJumpMode then
+            sliderContainer = Instance.new("Frame")
+            sliderContainer.Parent = toggleFrame
+            sliderContainer.BackgroundTransparency = 1
+            sliderContainer.Position = UDim2.new(0, 15, 0, 60)
+            sliderContainer.Size = UDim2.new(1, -30, 0, 30)
+            sliderContainer.Visible = false
+            sliderContainer.ZIndex = 2
+
+            local currentValue = isFlyMode and speedValue or (isSpeedMode and speedValue or jumpValue)
+            local minValue = isJumpMode and 50 or 10
+            local maxValue = isJumpMode and 500 or 200
+            
+            valueLabel = Instance.new("TextLabel")
+            valueLabel.Parent = sliderContainer
+            valueLabel.BackgroundTransparency = 1
+            valueLabel.Size = UDim2.new(1, 0, 0, 15)
+            valueLabel.Font = Enum.Font.Gotham
+            valueLabel.Text = (isFlyMode and "Fly Speed: " or (isSpeedMode and "Walk Speed: " or "Jump Power: ")) .. currentValue
+            valueLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+            valueLabel.TextSize = 12
+            valueLabel.TextXAlignment = Enum.TextXAlignment.Left
+            valueLabel.ZIndex = 3
+
+            -- Slider track
+            sliderTrack = Instance.new("Frame")
+            sliderTrack.Parent = sliderContainer
+            sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+            sliderTrack.BorderSizePixel = 0
+            sliderTrack.Position = UDim2.new(0, 0, 0, 15)
+            sliderTrack.Size = UDim2.new(1, 0, 0, 10)
+            sliderTrack.ZIndex = 2
+            
+            local trackCorner = Instance.new("UICorner")
+            trackCorner.Parent = sliderTrack
+            trackCorner.CornerRadius = UDim.new(0, 5)
+            
+            local trackStroke = Instance.new("UIStroke")
+            trackStroke.Parent = sliderTrack
+            trackStroke.Color = Color3.fromRGB(100, 100, 100)
+            trackStroke.Thickness = 1
+            trackStroke.Transparency = 0.3
+
+            -- Slider button
+            sliderButton = Instance.new("Frame")
+            sliderButton.Parent = sliderTrack
+            sliderButton.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
+            sliderButton.BackgroundTransparency = 0
+            sliderButton.BorderSizePixel = 0
+            sliderButton.Size = UDim2.new(0, 15, 2, 0)
+            sliderButton.Position = UDim2.new((currentValue - minValue) / (maxValue - minValue), -7, 0, -2)
+            sliderButton.ZIndex = 3
+            
+            local buttonCorner = Instance.new("UICorner")
+            buttonCorner.Parent = sliderButton
+            buttonCorner.CornerRadius = UDim.new(0, 5)
+            
+            local glow = Instance.new("UIStroke")
+            glow.Parent = sliderButton
+            glow.Color = Color3.fromRGB(255, 0, 255)
+            glow.Thickness = 2
+            glow.Transparency = 0.2
+
+            -- Slider drag functionality
+            local drag = false
+            sliderTrack.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    drag = true
+                end
+            end)
+
+            UIS.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                    drag = false
+                end
+            end)
+
+            UIS.InputChanged:Connect(function(input)
+                if drag and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local x = math.clamp(input.Position.X - sliderTrack.AbsolutePosition.X, 0, sliderTrack.AbsoluteSize.X)
+                    sliderButton.Position = UDim2.new(x / sliderTrack.AbsoluteSize.X, -7, 0, -2)
+                    local newValue = math.floor(x / sliderTrack.AbsoluteSize.X * (maxValue - minValue)) + minValue
+                    
+                    if isFlyMode then
+                        speedValue = newValue
+                        valueLabel.Text = "Fly Speed: " .. speedValue
+                    elseif isSpeedMode then
+                        speedValue = newValue
+                        valueLabel.Text = "Walk Speed: " .. speedValue
+                        if speedEnabled then
+                            hum.WalkSpeed = speedValue
+                        end
+                    elseif isJumpMode then
+                        jumpValue = newValue
+                        valueLabel.Text = "Jump Power: " .. jumpValue
+                        if jumpEnabled then
+                            hum.JumpPower = jumpValue
+                        end
+                    end
+                end
+            end)
+        end
+
+        -- Toggle button
+        local toggleBg = Instance.new("TextButton")
+        toggleBg.Name = "ToggleBg"
+        toggleBg.Parent = toggleFrame
+        toggleBg.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
+        toggleBg.BackgroundTransparency = 0
+        toggleBg.BorderSizePixel = 0
+        toggleBg.Position = UDim2.new(1, -80, 0, 15)
+        toggleBg.Size = UDim2.new(0, 60, 0, 25)
+        toggleBg.Text = ""
+        toggleBg.AutoButtonColor = false
+        toggleBg.ZIndex = 3
+        
+        local toggleBgCorner = Instance.new("UICorner")
+        toggleBgCorner.Parent = toggleBg
+        toggleBgCorner.CornerRadius = UDim.new(0, 12)
+        
+        local toggleBgStroke = Instance.new("UIStroke")
+        toggleBgStroke.Parent = toggleBg
+        toggleBgStroke.Color = Color3.fromRGB(120, 0, 0)
+        toggleBgStroke.Thickness = 2
+
+        local toggleButton = Instance.new("TextButton")
+        toggleButton.Name = "ToggleButton"
+        toggleButton.Parent = toggleBg
+        toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+        toggleButton.BackgroundTransparency = 0
+        toggleButton.BorderSizePixel = 0
+        toggleButton.Position = UDim2.new(0, 3, 0, 3)
+        toggleButton.Size = UDim2.new(0, 19, 0, 19)
+        toggleButton.Text = ""
+        toggleButton.AutoButtonColor = false
+        toggleButton.ZIndex = 4
+        
+        local toggleButtonCorner = Instance.new("UICorner")
+        toggleButtonCorner.Parent = toggleButton
+        toggleButtonCorner.CornerRadius = UDim.new(0, 8)
+        
+        local toggleButtonStroke = Instance.new("UIStroke")
+        toggleButtonStroke.Parent = toggleButton
+        toggleButtonStroke.Color = Color3.fromRGB(255, 150, 150)
+        toggleButtonStroke.Thickness = 1
+
+        local isEnabled = defaultValue or false
+
+        local function UpdateToggleAppearance()
+            if isEnabled then
+                toggleBg.BackgroundColor3 = Color3.fromRGB(0, 80, 0)
+                toggleBgStroke.Color = Color3.fromRGB(0, 120, 0)
+                toggleButton.BackgroundColor3 = Color3.fromRGB(100, 255, 100)
+                toggleButton.Position = UDim2.new(1, -22, 0, 3)
+                toggleButtonStroke.Color = Color3.fromRGB(150, 255, 150)
+                statusLabel.Text = "Status: ON"
+                statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+                
+                if (isFlyMode or isSpeedMode or isJumpMode) and sliderContainer then
+                    sliderContainer.Visible = true
+                end
+            else
+                toggleBg.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
+                toggleBgStroke.Color = Color3.fromRGB(120, 0, 0)
+                toggleButton.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+                toggleButton.Position = UDim2.new(0, 3, 0, 3)
+                toggleButtonStroke.Color = Color3.fromRGB(255, 150, 150)
+                statusLabel.Text = "Status: OFF"
+                statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                
+                if (isFlyMode or isSpeedMode or isJumpMode) and sliderContainer then
+                    sliderContainer.Visible = false
+                end
+            end
+        end
+
+        UpdateToggleAppearance()
+
+        local function ToggleState()
+            local statusText = ""
+            
+            if isFlyMode then
+                if isEnabled then
+                    stopFly()
+                    statusText = "Fly Mode: OFF"
+                else
+                    startFly()
+                    statusText = "Fly Mode: ON"
+                end
+            elseif isSpeedMode then
+                if isEnabled then
+                    stopSpeed()
+                    statusText = "Speed Boost: OFF"
+                else
+                    startSpeed()
+                    statusText = "Speed Boost: ON"
+                end
+            elseif isJumpMode then
+                if isEnabled then
+                    stopJump()
+                    statusText = "Jump Boost: OFF"
+                else
+                    startJump()
+                    statusText = "Jump Boost: ON"
+                end
+            else
+                if text == "Invisible" then
+                    statusText = toggleInvisibility()
+                elseif text == "No Clip" then
+                    if isEnabled then
+                        stopNoClip()
+                        statusText = "No Clip: OFF"
+                    else
+                        startNoClip()
+                        statusText = "No Clip: ON"
+                    end
+                elseif text == "ESP Players" then
+                    statusText = toggleESP()
+                elseif text == "X-Ray Vision" then
+                    statusText = toggleXRay()
+                elseif text == "Full Bright" then
+                    statusText = toggleFullBright()
+                elseif text == "Anti-AFK" then
+                    statusText = enableAntiAFK()
+                elseif text == "Disable 3D Rendering" then
+                    statusText = toggleDisable3DRendering()
+                elseif text == "Black Screen" then
+                    statusText = toggleBlackScreen()
+                elseif text == "White Screen" then
+                    statusText = toggleWhiteScreen()
+                elseif text == "Disable Notification" then
+                    statusText = toggleDisableNotification()
+                end
+            end
+            
+            isEnabled = not isEnabled
+            UpdateToggleAppearance()
+            
+            StatusLabel.Text = statusText
+            
+            return isEnabled
+        end
+
+        toggleBg.MouseButton1Click:Connect(ToggleState)
+        toggleButton.MouseButton1Click:Connect(ToggleState)
+
+        return {
+            Frame = toggleFrame,
+            Toggle = ToggleState,
+            GetState = function() return isEnabled end,
+            SetState = function(state)
+                isEnabled = state
+                UpdateToggleAppearance()
+            end
+        }
+    end
+
+    -- Function to create button (TIDAK DIUBAH)
+    local function CreateButton(parent, text, icon, onClick)
+        local button = Instance.new("TextButton")
+        button.Parent = parent
+        button.BackgroundColor3 = Color3.fromRGB(60, 0, 90)
+        button.BackgroundTransparency = 0.3
+        button.BorderSizePixel = 0
+        button.Size = UDim2.new(0, 480, 0, 50)
+        button.Font = Enum.Font.GothamBold
+        button.Text = "   " .. (icon or "⭐") .. "  " .. text
+        button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        button.TextSize = 14
+        button.AutoButtonColor = true
+        button.ZIndex = 2
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.Parent = button
+        buttonCorner.CornerRadius = UDim.new(0, 8)
+        
+        local buttonStroke = Instance.new("UIStroke")
+        buttonStroke.Parent = button
+        buttonStroke.Color = Color3.fromRGB(120, 80, 180)
+        buttonStroke.Thickness = 2
+        buttonStroke.Transparency = 0.3
+
+        button.MouseButton1Click:Connect(onClick)
+
+        return button
+    end
+
+    -- Confirmation dialog functions (TIDAK DIUBAH)
+    local function ShowConfirmationDialog()
+        ConfirmationOverlay.Visible = true
+        ConfirmationDialog.Position = UDim2.new(0.5, -175, 0.3, -100)
+        
+        TS:Create(ConfirmationDialog, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0.5, -175, 0.5, -100)
+        }):Play()
+        
+        TS:Create(ConfirmationOverlay, TweenInfo.new(0.3), {
+            BackgroundTransparency = 0.5
+        }):Play()
+        
+        StatusLabel.Text = "Status: Confirmation Dialog Shown"
+    end
+
+    local function HideConfirmationDialog()
+        TS:Create(ConfirmationDialog, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, -175, 0.3, -100)
+        }):Play()
+        
+        TS:Create(ConfirmationOverlay, TweenInfo.new(0.3), {
+            BackgroundTransparency = 0.7
+        }):Play()
+        
+        wait(0.3)
+        ConfirmationOverlay.Visible = false
+        StatusLabel.Text = "Status: Confirmation Dialog Hidden"
+    end
+
+    local function CloseGUI()
+        TS:Create(MainContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Size = UDim2.new(0, 0, 0, 0),
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        
+        TS:Create(LogoButton, TweenInfo.new(0.4), {
+            Size = UDim2.new(0, 0, 0, 0),
+            BackgroundTransparency = 1
+        }):Play()
+        
+        wait(0.4)
+        ScreenGui:Destroy()
+    end
+
+    -- Create content for each page (TIDAK DIUBAH KECUALI TELEPORT PAGE)
+    local homePage = PagesFolder:FindFirstChild("HomePage")
+    if homePage then
+        CreateWelcomePanel(homePage)
+        
+        CreateFeatureCard(homePage, "Fly Mode System", "Terbang bebas dengan kontrol kecepatan yang dapat disesuaikan", "✈️")
+        CreateFeatureCard(homePage, "Speed & Jump Boost", "Tingkatkan kecepatan berjalan dan kekuatan lompat dengan slider", "💨")
+        CreateFeatureCard(homePage, "ESP & X-Ray Vision", "Lihat pemain melalui dinding dan highlight semua pemain", "👁️")
+        CreateFeatureCard(homePage, "Teleport & Marker System", "Teleport ke pemain dan buat marker system untuk auto teleport", "🚀")
+        CreateFeatureCard(homePage, "Misc Features", "Anti-AFK, Screen Effects, dan berbagai fitur tambahan lainnya", "🔧")
+    end
+
+    local playerPage = PagesFolder:FindFirstChild("PlayerPage")
+    local visualsPage = PagesFolder:FindFirstChild("VisualsPage")
+    local miscPage = PagesFolder:FindFirstChild("MiscPage")
+    local teleportPage = PagesFolder:FindFirstChild("TeleportPage")
+    local settingsPage = PagesFolder:FindFirstChild("SettingsPage")
+
+    -- Player Page
+    if playerPage then
+        CreateToggleSlider(playerPage, "Fly Mode", "✈️", false, true, false, false)
+        CreateToggleSlider(playerPage, "Speed Boost", "💨", false, false, true, false)
+        CreateToggleSlider(playerPage, "Jump Boost", "🦘", false, false, false, true)
+        CreateToggleSlider(playerPage, "Invisible", "🌀", false, false, false, false)
+        CreateToggleSlider(playerPage, "No Clip", "🚫", false, false, false, false)
+    end
+
+    -- Visuals Page
+    if visualsPage then
+        CreateToggleSlider(visualsPage, "ESP Players", "🎯", false, false, false, false)
+        CreateToggleSlider(visualsPage, "X-Ray Vision", "🔍", false, false, false, false)
+        CreateToggleSlider(visualsPage, "Full Bright", "💡", false, false, false, false)
+    end
+
+    -- Misc Page
+    if miscPage then
+        CreateToggleSlider(miscPage, "Anti-AFK", "⏰", false, false, false, false)
+        CreateToggleSlider(miscPage, "Disable 3D Rendering", "🖥️", false, false, false, false)
+        CreateToggleSlider(miscPage, "Black Screen", "⬛", false, false, false, false)
+        CreateToggleSlider(miscPage, "White Screen", "⬜", false, false, false, false)
+        CreateToggleSlider(miscPage, "Disable Notification", "🔕", false, false, false, false)
+        
+        CreateButton(miscPage, "Reset All Effects", "🔄", function()
+            if disable3DRendering then
+                toggleDisable3DRendering()
+            end
+            if blackScreenEnabled then
+                toggleBlackScreen()
+            end
+            if whiteScreenEnabled then
+                toggleWhiteScreen()
+            end
+            if disableNotificationEnabled then
+                toggleDisableNotification()
+            end
+            StatusLabel.Text = "Status: All Misc effects reset"
+        end)
+    end
+
+    -- Teleport Page - DIUBAH: MENAMBAH MARKER SYSTEM
+    if teleportPage then
+        -- Player List dengan Search Real-time
+        CreatePlayerListFrame(teleportPage)
+        
+        -- Marker System - DITAMBAHKAN
+        local markerSystem = CreateMarkerSystemFrame(teleportPage)
+        markerSystem.Position = UDim2.new(0, 0, 0, 320)
+        
+        CreateButton(teleportPage, "Teleport to Spawn", "🏠", function()
+            local spawnLocation = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChild("Spawn")
+            if spawnLocation then
+                root.CFrame = spawnLocation.CFrame
+            else
+                root.CFrame = CFrame.new(0, 100, 0)
+            end
+            StatusLabel.Text = "Status: Teleported to spawn"
+        end)
+
+        CreateButton(teleportPage, "Teleport to Sky", "☁️", function()
+            root.CFrame = CFrame.new(root.Position.X, root.Position.Y + 1000, root.Position.Z)
+            StatusLabel.Text = "Status: Teleported to sky"
+        end)
+    end
+
+    -- Settings Page
+    if settingsPage then
+        CreateToggleSlider(settingsPage, "Auto Save Config", "💾", false, false, false, false)
+        CreateToggleSlider(settingsPage, "UI Sound Effects", "🔊", false, false, false, false)
+        
+        CreateButton(settingsPage, "Reset All Settings", "🔄", function()
+            StatusLabel.Text = "Status: Settings reset"
+        end)
+    end
+
+    -- GUI Show/Hide functions (TIDAK DIUBAH)
+    local function ShowGUIWithBounce()
+        guiVisible = true
+        
+        local logoStartPos = LogoButton.Position
+        local mainContainerPos = UDim2.new(0.3, 0, 0.2, 0)
+        
+        MainContainer.Position = UDim2.new(
+            logoStartPos.X.Scale,
+            logoStartPos.X.Offset + 30,
+            logoStartPos.Y.Scale,
+            logoStartPos.Y.Offset + 30
+        )
+        MainContainer.Size = UDim2.new(0, 50, 0, 50)
+        MainContainer.Visible = true
+        
+        TS:Create(LogoButton, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Rotation = 360,
+            Size = UDim2.new(0, 70, 0, 70)
+        }):Play()
+        
+        wait(0.2)
+        
+        TS:Create(MainContainer, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = mainContainerPos,
+            Size = UDim2.new(0, 700, 0, 550)
+        }):Play()
+        
+        wait(0.1)
+        
+        TS:Create(MainContainer, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 650, 0, 500)
+        }):Play()
+        
+        TS:Create(LogoButton, TweenInfo.new(0.3), {
+            Size = UDim2.new(0, 60, 0, 60),
+            Rotation = 0
+        }):Play()
+        
+        StatusLabel.Text = "Status: GUI Shown with Bounce"
+    end
+
+    local function HideGUIWithBounce()
+        local logoPos = LogoButton.Position
+        
+        TS:Create(MainContainer, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 670, 0, 520)
+        }):Play()
+        
+        wait(0.1)
+        
+        TS:Create(MainContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+            Position = UDim2.new(
+                logoPos.X.Scale,
+                logoPos.X.Offset + 30,
+                logoPos.Y.Scale, 
+                logoPos.Y.Offset + 30
+            ),
+            Size = UDim2.new(0, 50, 0, 50)
+        }):Play()
+        
+        TS:Create(LogoButton, TweenInfo.new(0.4), {
+            Rotation = -360,
+            Size = UDim2.new(0, 70, 0, 70)
+        }):Play()
+        
+        wait(0.4)
+        
+        MainContainer.Visible = false
+        TS:Create(LogoButton, TweenInfo.new(0.3), {
+            Size = UDim2.new(0, 60, 0, 60),
+            Rotation = 0
+        }):Play()
+        
+        guiVisible = false
+        StatusLabel.Text = "Status: GUI Hidden with Bounce"
+    end
+
+    -- Draggable functions (TIDAK DIUBAH)
+    local function MakeDraggable(frame, dragHandle)
+        local dragStart = nil
+        local startPos = nil
+        
+        dragHandle.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragStart = input.Position
+                startPos = frame.Position
+                
+                local connection
+                connection = input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragStart = nil
+                        connection:Disconnect()
+                    end
+                end)
+            end
+        end)
+        
+        dragHandle.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement and dragStart then
+                local delta = input.Position - dragStart
+                frame.Position = UDim2.new(
+                    startPos.X.Scale, 
+                    startPos.X.Offset + delta.X, 
+                    startPos.Y.Scale, 
+                    startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+    end
+
+    local function MakeLogoDraggable(logo)
+        local dragStart = nil
+        local startPos = nil
+        
+        logo.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragStart = input.Position
+                startPos = logo.Position
+                
+                local connection
+                connection = input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragStart = nil
+                        connection:Disconnect()
+                    end
+                end)
+            end
+        end)
+        
+        logo.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement and dragStart then
+                local delta = input.Position - dragStart
+                logo.Position = UDim2.new(
+                    startPos.X.Scale, 
+                    startPos.X.Offset + delta.X, 
+                    startPos.Y.Scale, 
+                    startPos.Y.Offset + delta.Y
+                )
+            end
+        end)
+    end
+
+    local function ToggleGUI()
+        if guiVisible then
+            HideGUIWithBounce()
+        else
+            ShowGUIWithBounce()
+        end
+    end
+
+    -- Connect events (TIDAK DIUBAH)
+    MakeDraggable(MainContainer, TopBar)
+    MakeLogoDraggable(LogoButton)
+
+    LogoButton.MouseButton1Click:Connect(function()
+        ToggleGUI()
+    end)
+
+    CloseButton.MouseButton1Click:Connect(function()
+        ShowConfirmationDialog()
+    end)
+
+    YesButton.MouseButton1Click:Connect(function()
+        TS:Create(YesButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 110, 0, 35)
+        }):Play()
+        wait(0.1)
+        TS:Create(YesButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 120, 0, 40)
+        }):Play()
+        
+        wait(0.2)
+        HideConfirmationDialog()
+        wait(0.3)
+        CloseGUI()
+    end)
+
+    NoButton.MouseButton1Click:Connect(function()
+        TS:Create(NoButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 110, 0, 35)
+        }):Play()
+        wait(0.1)
+        TS:Create(NoButton, TweenInfo.new(0.1), {
+            Size = UDim2.new(0, 120, 0, 40)
+        }):Play()
+        
+        wait(0.2)
+        HideConfirmationDialog()
+    end)
+
+    MinimizeButton.MouseButton1Click:Connect(function()
+        ToggleGUI()
+    end)
+
+    -- Clock update
+    local function UpdateClock()
+        while wait(1) do
+            local currentTime = os.date("%H:%M:%S")
+            TimeLabel.Text = currentTime
+        end
+    end
+
+    spawn(UpdateClock)
+
+    return ScreenGui
+end
+
+-- Execute GUI dengan error handling
+local success, result = pcall(function()
+    local gui = CreateModernGUI()
+    
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "PURPLE HUB v6.0 ULTIMATE Loaded!",
+        Text = "Marker System & All Features Active!",
+        Duration = 5,
+    })
+
+    return gui
+end)
+
+if success then
+    -- GUI berhasil dibuat
+else
+    -- Error handling (opsional)
+end
