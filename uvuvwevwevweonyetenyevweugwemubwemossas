@@ -2,23 +2,35 @@ local player = game.Players.LocalPlayer
 local UIS = game:GetService("UserInputService")
 local RS = game:GetService("RunService")
 local TS = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
 
 local char = player.Character or player.CharacterAdded:Wait()
 local hum = char:WaitForChild("Humanoid")
+local root = char:WaitForChild("HumanoidRootPart")
 
 local fly = false
 local invis = false
-local speed = 60
+local speedEnabled = false
+local jumpEnabled = false
+local noclipEnabled = false
+local espEnabled = false
+local xrayEnabled = false
+local fullbrightEnabled = false
+local speedValue = 60
+local jumpValue = 100
+local originalWalkSpeed = hum.WalkSpeed
+local originalJumpPower = hum.JumpPower
 local bg, bv
 
 -- Fly system functions
 local function startFly()
     fly = true
-    bg = Instance.new("BodyGyro", char.HumanoidRootPart)
+    bg = Instance.new("BodyGyro", root)
     bg.P = 9e5
     bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
 
-    bv = Instance.new("BodyVelocity", char.HumanoidRootPart)
+    bv = Instance.new("BodyVelocity", root)
     bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
 
     hum.PlatformStand = true
@@ -29,6 +41,411 @@ local function stopFly()
     hum.PlatformStand = false
     if bg then bg:Destroy() end
     if bv then bv:Destroy() end
+end
+
+-- Speed system functions
+local function startSpeed()
+    speedEnabled = true
+    originalWalkSpeed = hum.WalkSpeed
+    hum.WalkSpeed = speedValue
+end
+
+local function stopSpeed()
+    speedEnabled = false
+    hum.WalkSpeed = originalWalkSpeed
+end
+
+-- Jump system functions
+local function startJump()
+    jumpEnabled = true
+    originalJumpPower = hum.JumpPower
+    hum.JumpPower = jumpValue
+end
+
+local function stopJump()
+    jumpEnabled = false
+    hum.JumpPower = originalJumpPower
+end
+
+-- No Clip system
+local function startNoClip()
+    noclipEnabled = true
+    RS.Stepped:Connect(function()
+        if noclipEnabled and char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function stopNoClip()
+    noclipEnabled = false
+    if char then
+        for _, part in pairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+-- ESP System
+local espObjects = {}
+local function createESP(targetPlayer)
+    local character = targetPlayer.Character
+    if not character then return end
+    
+    local highlight = Instance.new("Highlight")
+    highlight.Parent = character
+    highlight.Adornee = character
+    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    
+    espObjects[targetPlayer] = highlight
+end
+
+local function removeESP(targetPlayer)
+    if espObjects[targetPlayer] then
+        espObjects[targetPlayer]:Destroy()
+        espObjects[targetPlayer] = nil
+    end
+end
+
+local function toggleESP()
+    espEnabled = not espEnabled
+    
+    if espEnabled then
+        -- Add ESP to all players
+        for _, player in pairs(game.Players:GetPlayers()) do
+            if player ~= game.Players.LocalPlayer then
+                createESP(player)
+            end
+        end
+        
+        -- Connect to new players
+        game.Players.PlayerAdded:Connect(function(player)
+            if espEnabled then
+                player.CharacterAdded:Connect(function()
+                    if espEnabled then
+                        createESP(player)
+                    end
+                end)
+            end
+        end)
+    else
+        -- Remove all ESP
+        for player, highlight in pairs(espObjects) do
+            highlight:Destroy()
+        end
+        espObjects = {}
+    end
+end
+
+-- X-Ray Vision
+local function toggleXRay()
+    xrayEnabled = not xrayEnabled
+    
+    if xrayEnabled then
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("BasePart") and part.Transparency < 0.5 then
+                part.LocalTransparencyModifier = 0.5
+            end
+        end
+    else
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.LocalTransparencyModifier = 0
+            end
+        end
+    end
+end
+
+-- Full Bright
+local function toggleFullBright()
+    fullbrightEnabled = not fullbrightEnabled
+    
+    if fullbrightEnabled then
+        Lighting.Ambient = Color3.new(1, 1, 1)
+        Lighting.Brightness = 2
+        Lighting.GlobalShadows = false
+    else
+        Lighting.Ambient = Color3.new(0, 0, 0)
+        Lighting.Brightness = 1
+        Lighting.GlobalShadows = true
+    end
+end
+
+-- Teleport to Player dengan Player List dan Search Real-time
+local function CreatePlayerListFrame(parent)
+    local playerListFrame = Instance.new("Frame")
+    playerListFrame.Name = "PlayerListFrame"
+    playerListFrame.Parent = parent
+    playerListFrame.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
+    playerListFrame.BackgroundTransparency = 0.3
+    playerListFrame.BorderSizePixel = 0
+    playerListFrame.Size = UDim2.new(0, 480, 0, 300)
+    playerListFrame.ZIndex = 2
+    
+    local playerListCorner = Instance.new("UICorner")
+    playerListCorner.Parent = playerListFrame
+    playerListCorner.CornerRadius = UDim.new(0, 10)
+    
+    local playerListStroke = Instance.new("UIStroke")
+    playerListStroke.Parent = playerListFrame
+    playerListStroke.Color = Color3.fromRGB(100, 50, 150)
+    playerListStroke.Thickness = 2
+    playerListStroke.Transparency = 0.3
+
+    -- Search Box
+    local searchBox = Instance.new("TextBox")
+    searchBox.Name = "SearchBox"
+    searchBox.Parent = playerListFrame
+    searchBox.BackgroundColor3 = Color3.fromRGB(50, 0, 75)
+    searchBox.BackgroundTransparency = 0.2
+    searchBox.BorderSizePixel = 0
+    searchBox.Position = UDim2.new(0, 15, 0, 15)
+    searchBox.Size = UDim2.new(1, -30, 0, 40)
+    searchBox.Font = Enum.Font.Gotham
+    searchBox.PlaceholderText = "🔍 Cari player..."
+    searchBox.Text = ""
+    searchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    searchBox.TextSize = 14
+    searchBox.ZIndex = 3
+    
+    local searchCorner = Instance.new("UICorner")
+    searchCorner.Parent = searchBox
+    searchCorner.CornerRadius = UDim.new(0, 8)
+    
+    local searchPadding = Instance.new("UIPadding")
+    searchPadding.Parent = searchBox
+    searchPadding.PaddingLeft = UDim.new(0, 15)
+
+    -- Player List Scrolling Frame
+    local playerScrollFrame = Instance.new("ScrollingFrame")
+    playerScrollFrame.Name = "PlayerScrollFrame"
+    playerScrollFrame.Parent = playerListFrame
+    playerScrollFrame.Active = true
+    playerScrollFrame.BackgroundColor3 = Color3.fromRGB(35, 0, 50)
+    playerScrollFrame.BackgroundTransparency = 0.4
+    playerScrollFrame.BorderSizePixel = 0
+    playerScrollFrame.Position = UDim2.new(0, 15, 0, 70)
+    playerScrollFrame.Size = UDim2.new(1, -30, 1, -90)
+    playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    playerScrollFrame.ScrollBarThickness = 5
+    playerScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(120, 80, 180)
+    playerScrollFrame.ZIndex = 2
+    
+    local scrollCorner = Instance.new("UICorner")
+    scrollCorner.Parent = playerScrollFrame
+    scrollCorner.CornerRadius = UDim.new(0, 8)
+
+    local playerListLayout = Instance.new("UIListLayout")
+    playerListLayout.Parent = playerScrollFrame
+    playerListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    playerListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    playerListLayout.Padding = UDim.new(0, 5)
+    
+    local playerListPadding = Instance.new("UIPadding")
+    playerListPadding.Parent = playerScrollFrame
+    playerListPadding.PaddingTop = UDim.new(0, 5)
+    playerListPadding.PaddingLeft = UDim.new(0, 5)
+    playerListPadding.PaddingRight = UDim.new(0, 5)
+
+    local function CreatePlayerButton(player)
+        local playerButton = Instance.new("TextButton")
+        playerButton.Name = player.Name
+        playerButton.Parent = playerScrollFrame
+        playerButton.BackgroundColor3 = Color3.fromRGB(60, 0, 90)
+        playerButton.BackgroundTransparency = 0.3
+        playerButton.BorderSizePixel = 0
+        playerButton.Size = UDim2.new(1, -10, 0, 50)
+        playerButton.Font = Enum.Font.Gotham
+        playerButton.Text = "👤 " .. player.DisplayName .. " (@" .. player.Name .. ")"
+        playerButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        playerButton.TextSize = 12
+        playerButton.AutoButtonColor = true
+        playerButton.ZIndex = 3
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.Parent = playerButton
+        buttonCorner.CornerRadius = UDim.new(0, 8)
+        
+        local buttonStroke = Instance.new("UIStroke")
+        buttonStroke.Parent = playerButton
+        buttonStroke.Color = Color3.fromRGB(120, 80, 180)
+        buttonStroke.Thickness = 1
+        buttonStroke.Transparency = 0.3
+
+        playerButton.MouseButton1Click:Connect(function()
+            if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                root.CFrame = player.Character.HumanoidRootPart.CFrame
+            end
+        end)
+
+        return playerButton
+    end
+
+    local function UpdatePlayerList(searchText)
+        -- Clear existing buttons
+        for _, child in pairs(playerScrollFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                child:Destroy()
+            end
+        end
+
+        -- Add filtered players
+        local playerCount = 0
+        for _, player in pairs(game.Players:GetPlayers()) do
+            if player ~= game.Players.LocalPlayer then
+                local displayName = player.DisplayName:lower()
+                local userName = player.Name:lower()
+                local searchLower = searchText:lower()
+                
+                if searchText == "" or displayName:find(searchLower) or userName:find(searchLower) then
+                    CreatePlayerButton(player)
+                    playerCount = playerCount + 1
+                end
+            end
+        end
+
+        -- Update canvas size based on number of players
+        playerScrollFrame.CanvasSize = UDim2.new(0, 0, 0, playerCount * 55)
+    end
+
+    -- Initial player list
+    UpdatePlayerList("")
+
+    -- Search functionality
+    searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        UpdatePlayerList(searchBox.Text)
+    end)
+
+    -- Update player list when players join/leave
+    game.Players.PlayerAdded:Connect(function()
+        UpdatePlayerList(searchBox.Text)
+    end)
+
+    game.Players.PlayerRemoving:Connect(function()
+        UpdatePlayerList(searchBox.Text)
+    end)
+
+    return playerListFrame
+end
+
+-- Anti-AFK
+local function enableAntiAFK()
+    local VirtualUser = game:GetService("VirtualUser")
+    game:GetService("Players").LocalPlayer.Idled:connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end
+
+-- Fitur-fitur Misc baru
+local disable3DRendering = false
+local blackScreenEnabled = false
+local whiteScreenEnabled = false
+local disableNotificationEnabled = false
+
+local originalGraphicsQualityLevel = settings().Rendering.QualityLevel
+
+-- Disable 3D Rendering
+local function toggleDisable3DRendering()
+    disable3DRendering = not disable3DRendering
+    
+    if disable3DRendering then
+        settings().Rendering.QualityLevel = 1
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("Part") or part:IsA("MeshPart") then
+                part.Transparency = 1
+            end
+        end
+    else
+        settings().Rendering.QualityLevel = originalGraphicsQualityLevel
+        for _, part in pairs(Workspace:GetDescendants()) do
+            if part:IsA("Part") or part:IsA("MeshPart") then
+                part.Transparency = 0
+            end
+        end
+    end
+end
+
+-- Black Screen
+local blackScreenFrame = nil
+local function toggleBlackScreen()
+    blackScreenEnabled = not blackScreenEnabled
+    
+    if blackScreenEnabled then
+        -- Hentikan white screen jika aktif
+        if whiteScreenEnabled then
+            toggleWhiteScreen()
+        end
+        
+        blackScreenFrame = Instance.new("Frame")
+        blackScreenFrame.Name = "BlackScreen"
+        blackScreenFrame.Parent = game:GetService("CoreGui")
+        blackScreenFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+        blackScreenFrame.BackgroundTransparency = 0
+        blackScreenFrame.BorderSizePixel = 0
+        blackScreenFrame.Size = UDim2.new(1, 0, 1, 0)
+        blackScreenFrame.ZIndex = 999
+    else
+        if blackScreenFrame then
+            blackScreenFrame:Destroy()
+            blackScreenFrame = nil
+        end
+    end
+end
+
+-- White Screen
+local whiteScreenFrame = nil
+local function toggleWhiteScreen()
+    whiteScreenEnabled = not whiteScreenEnabled
+    
+    if whiteScreenEnabled then
+        -- Hentikan black screen jika aktif
+        if blackScreenEnabled then
+            toggleBlackScreen()
+        end
+        
+        whiteScreenFrame = Instance.new("Frame")
+        whiteScreenFrame.Name = "WhiteScreen"
+        whiteScreenFrame.Parent = game:GetService("CoreGui")
+        whiteScreenFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+        whiteScreenFrame.BackgroundTransparency = 0
+        whiteScreenFrame.BorderSizePixel = 0
+        whiteScreenFrame.Size = UDim2.new(1, 0, 1, 0)
+        whiteScreenFrame.ZIndex = 999
+    else
+        if whiteScreenFrame then
+            whiteScreenFrame:Destroy()
+            whiteScreenFrame = nil
+        end
+    end
+end
+
+-- Disable Notification
+local function toggleDisableNotification()
+    disableNotificationEnabled = not disableNotificationEnabled
+    
+    if disableNotificationEnabled then
+        -- Override notification function
+        local oldNotify = game:GetService("StarterGui").SetCore
+        game:GetService("StarterGui").SetCore = function(self, func, data)
+            if func == "SendNotification" then
+                return nil -- Block notifications
+            end
+            return oldNotify(self, func, data)
+        end
+    else
+        -- Restore notification function
+        game:GetService("StarterGui").SetCore = game:GetService("StarterGui").SetCore
+    end
 end
 
 -- Fly movement
@@ -45,8 +462,15 @@ RS.RenderStepped:Connect(function()
         if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then m -= Vector3.new(0,1,0) end
 
         if m.Magnitude > 0 then m = m.Unit end
-        bv.Velocity = m * speed
+        bv.Velocity = m * speedValue
         bg.CFrame = cam.CFrame
+    end
+end)
+
+-- Update speed value when changed
+RS.RenderStepped:Connect(function()
+    if speedEnabled then
+        hum.WalkSpeed = speedValue
     end
 end)
 
@@ -61,22 +485,28 @@ local function toggleInvisibility()
     return invis
 end
 
--- No Clip function
-local function toggleNoClip()
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA("BasePart") and part.CanCollide then
-            part.CanCollide = not part.CanCollide
-        end
-    end
-end
-
--- Modified CreateModernGUI function with Fly Mode integration
-local function CreateModernGUI()
-    local UIS = game:GetService('UserInputService')
-    local TweenService = game:GetService("TweenService")
-    local RunService = game:GetService("RunService")
-    local Players = game:GetService("Players")
+-- Character added event
+player.CharacterAdded:Connect(function(character)
+    char = character
+    hum = character:WaitForChild("Humanoid")
+    root = character:WaitForChild("HumanoidRootPart")
+    originalWalkSpeed = hum.WalkSpeed
+    originalJumpPower = hum.JumpPower
     
+    -- Reapply effects if they were enabled
+    if invis then
+        toggleInvisibility()
+    end
+    if speedEnabled then
+        hum.WalkSpeed = speedValue
+    end
+    if jumpEnabled then
+        hum.JumpPower = jumpValue
+    end
+end)
+
+-- MODERN GUI CREATION DENGAN PERUBAHAN
+local function CreateModernGUI()
     local ScreenGui = Instance.new("ScreenGui")
     local MainContainer = Instance.new("Frame")
     local LogoButton = Instance.new("TextButton")
@@ -110,7 +540,7 @@ local function CreateModernGUI()
     MainContainer.BackgroundTransparency = 0.8
     MainContainer.BorderSizePixel = 0
     MainContainer.Position = UDim2.new(0.3, 0, 0.2, 0)
-    MainContainer.Size = UDim2.new(0, 600, 0, 450)
+    MainContainer.Size = UDim2.new(0, 650, 0, 500)
     MainContainer.Visible = false
     
     local MainContainerCorner = Instance.new("UICorner")
@@ -198,7 +628,7 @@ local function CreateModernGUI()
     TabButtonsFrame.BackgroundTransparency = 0.4
     TabButtonsFrame.BorderSizePixel = 0
     TabButtonsFrame.Position = UDim2.new(0, 0, 0, 40)
-    TabButtonsFrame.Size = UDim2.new(0, 150, 0, 370)
+    TabButtonsFrame.Size = UDim2.new(0, 150, 0, 420)
     
     local TabButtonsCorner = Instance.new("UICorner")
     TabButtonsCorner.Parent = TabButtonsFrame
@@ -376,11 +806,13 @@ local function CreateModernGUI()
     NoStroke.Color = Color3.fromRGB(120, 220, 120)
     NoStroke.Thickness = 2
 
+    -- Create tabs - MENGUBAH "World" MENJADI "Misc"
     local tabs = {
         {Name = "Home", Icon = "🔮"},
         {Name = "Player", Icon = "👤"}, 
         {Name = "Visuals", Icon = "👁️"},
-        {Name = "World", Icon = "🌍"},
+        {Name = "Misc", Icon = "🔧"}, -- Diubah dari "World" menjadi "Misc"
+        {Name = "Teleport", Icon = "🚀"},
         {Name = "Settings", Icon = "⚙️"}
     }
 
@@ -423,8 +855,8 @@ local function CreateModernGUI()
         pageFrame.BackgroundTransparency = 0.3
         pageFrame.BorderSizePixel = 0
         pageFrame.Position = UDim2.new(0, 150, 0, 40)
-        pageFrame.Size = UDim2.new(0, 450, 0, 370)
-        pageFrame.CanvasSize = UDim2.new(0, 0, 0, 800)
+        pageFrame.Size = UDim2.new(0, 500, 0, 420)
+        pageFrame.CanvasSize = UDim2.new(0, 0, 0, 1000)
         pageFrame.ScrollBarThickness = 3
         pageFrame.ScrollBarImageColor3 = Color3.fromRGB(120, 80, 180)
         pageFrame.Visible = false
@@ -466,6 +898,7 @@ local function CreateModernGUI()
         end
     end
 
+    -- Function to create welcome panel
     local function CreateWelcomePanel(parent)
         local welcomeFrame = Instance.new("Frame")
         welcomeFrame.Name = "WelcomePanel"
@@ -473,7 +906,7 @@ local function CreateModernGUI()
         welcomeFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 80)
         welcomeFrame.BackgroundTransparency = 0.2
         welcomeFrame.BorderSizePixel = 0
-        welcomeFrame.Size = UDim2.new(0, 420, 0, 180)
+        welcomeFrame.Size = UDim2.new(0, 480, 0, 180)
         welcomeFrame.ZIndex = 2
         
         local welcomeCorner = Instance.new("UICorner")
@@ -491,7 +924,7 @@ local function CreateModernGUI()
         titleLabel.Parent = welcomeFrame
         titleLabel.BackgroundTransparency = 1
         titleLabel.Position = UDim2.new(0, 15, 0, 15)
-        titleLabel.Size = UDim2.new(0, 390, 0, 30)
+        titleLabel.Size = UDim2.new(0, 450, 0, 30)
         titleLabel.Font = Enum.Font.GothamBold
         titleLabel.Text = "🌟 WELCOME TO PURPLE HUB v6.0 🌟"
         titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -510,9 +943,9 @@ local function CreateModernGUI()
         descLabel.Parent = welcomeFrame
         descLabel.BackgroundTransparency = 1
         descLabel.Position = UDim2.new(0, 20, 0, 55)
-        descLabel.Size = UDim2.new(0, 380, 0, 80)
+        descLabel.Size = UDim2.new(0, 440, 0, 80)
         descLabel.Font = Enum.Font.Gotham
-        descLabel.Text = "Premium Roblox GUI dengan fitur lengkap dan animasi yang smooth.\n\n✨ Fitur Unggulan:\n• Fly Mode dengan Speed Control\n• No Clip & Invisibility\n• Animasi Bounce yang Elegan\n• Drag & Drop Interface"
+        descLabel.Text = "Premium Roblox GUI dengan fitur lengkap dan animasi yang smooth.\n\n✨ Fitur Unggulan:\n• Fly Mode dengan Speed Control\n• Speed & Jump Boost dengan Slider\n• ESP, X-Ray, Full Bright\n• Teleport System\n• Anti-AFK & Banyak Lagi!"
         descLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
         descLabel.TextSize = 12
         descLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -525,9 +958,9 @@ local function CreateModernGUI()
         tipsLabel.Parent = welcomeFrame
         tipsLabel.BackgroundTransparency = 1
         tipsLabel.Position = UDim2.new(0, 20, 0, 145)
-        tipsLabel.Size = UDim2.new(0, 380, 0, 25)
+        tipsLabel.Size = UDim2.new(0, 440, 0, 25)
         tipsLabel.Font = Enum.Font.Gotham
-        tipsLabel.Text = "💡 Tips: Aktifkan Fly Mode untuk mengakses speed slider!"
+        tipsLabel.Text = "💡 Tips: Jelajahi semua tab untuk menemukan fitur-fitur keren!"
         tipsLabel.TextColor3 = Color3.fromRGB(180, 150, 255)
         tipsLabel.TextSize = 10
         tipsLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -536,6 +969,7 @@ local function CreateModernGUI()
         return welcomeFrame
     end
 
+    -- Function to create feature card
     local function CreateFeatureCard(parent, title, description, icon)
         local cardFrame = Instance.new("Frame")
         cardFrame.Name = "FeatureCard"
@@ -543,7 +977,7 @@ local function CreateModernGUI()
         cardFrame.BackgroundColor3 = Color3.fromRGB(45, 0, 70)
         cardFrame.BackgroundTransparency = 0.3
         cardFrame.BorderSizePixel = 0
-        cardFrame.Size = UDim2.new(0, 420, 0, 80)
+        cardFrame.Size = UDim2.new(0, 480, 0, 80)
         cardFrame.ZIndex = 2
         
         local cardCorner = Instance.new("UICorner")
@@ -574,7 +1008,7 @@ local function CreateModernGUI()
         titleLabel.Parent = cardFrame
         titleLabel.BackgroundTransparency = 1
         titleLabel.Position = UDim2.new(0, 80, 0, 15)
-        titleLabel.Size = UDim2.new(0, 320, 0, 25)
+        titleLabel.Size = UDim2.new(0, 380, 0, 25)
         titleLabel.Font = Enum.Font.GothamBold
         titleLabel.Text = title
         titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -587,7 +1021,7 @@ local function CreateModernGUI()
         descLabel.Parent = cardFrame
         descLabel.BackgroundTransparency = 1
         descLabel.Position = UDim2.new(0, 80, 0, 40)
-        descLabel.Size = UDim2.new(0, 320, 0, 30)
+        descLabel.Size = UDim2.new(0, 380, 0, 30)
         descLabel.Font = Enum.Font.Gotham
         descLabel.Text = description
         descLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
@@ -600,14 +1034,14 @@ local function CreateModernGUI()
         return cardFrame
     end
 
-    -- MODIFIED: CreateToggleSlider dengan fix background putih
-    local function CreateToggleSlider(parent, text, icon, defaultValue, isFlyMode)
+    -- Function to create toggle with slider
+    local function CreateToggleSlider(parent, text, icon, defaultValue, isFlyMode, isSpeedMode, isJumpMode)
         local toggleFrame = Instance.new("Frame")
         toggleFrame.Parent = parent
         toggleFrame.BackgroundColor3 = Color3.fromRGB(40, 0, 60)
         toggleFrame.BackgroundTransparency = 0.3
         toggleFrame.BorderSizePixel = 0
-        toggleFrame.Size = UDim2.new(0, 420, 0, isFlyMode and 120 or 60)
+        toggleFrame.Size = UDim2.new(0, 480, 0, (isFlyMode or isSpeedMode or isJumpMode) and 100 or 60)
         toggleFrame.ZIndex = 1
         
         local toggleCorner = Instance.new("UICorner")
@@ -624,7 +1058,7 @@ local function CreateModernGUI()
         textLabel.Parent = toggleFrame
         textLabel.BackgroundTransparency = 1
         textLabel.Position = UDim2.new(0, 15, 0, 10)
-        textLabel.Size = UDim2.new(0, 250, 0, 25)
+        textLabel.Size = UDim2.new(0, 300, 0, 25)
         textLabel.Font = Enum.Font.GothamBold
         textLabel.Text = "   " .. (icon or "⚡") .. "  " .. text
         textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -636,7 +1070,7 @@ local function CreateModernGUI()
         statusLabel.Parent = toggleFrame
         statusLabel.BackgroundTransparency = 1
         statusLabel.Position = UDim2.new(0, 15, 0, 35)
-        statusLabel.Size = UDim2.new(0, 250, 0, 20)
+        statusLabel.Size = UDim2.new(0, 300, 0, 20)
         statusLabel.Font = Enum.Font.Gotham
         statusLabel.Text = "Status: OFF"
         statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
@@ -644,95 +1078,123 @@ local function CreateModernGUI()
         statusLabel.TextXAlignment = Enum.TextXAlignment.Left
         statusLabel.ZIndex = 2
 
-        -- SPEED SLIDER untuk Fly Mode - FIXED BACKGROUND
-        local speedSliderContainer
-        local speedLabel
+        -- Slider container for Fly, Speed, Jump
+        local sliderContainer
+        local valueLabel
         local sliderTrack
         local sliderButton
         
-        if isFlyMode then
-            speedSliderContainer = Instance.new("Frame", toggleFrame)
-            speedSliderContainer.Size = UDim2.new(0.9, 0, 0, 40)
-            speedSliderContainer.Position = UDim2.new(0.05, 0, 0.5, 0)
-            speedSliderContainer.BackgroundTransparency = 1
-            speedSliderContainer.Visible = false
-            speedSliderContainer.ZIndex = 2
+        if isFlyMode or isSpeedMode or isJumpMode then
+            sliderContainer = Instance.new("Frame")
+            sliderContainer.Parent = toggleFrame
+            sliderContainer.BackgroundTransparency = 1
+            sliderContainer.Position = UDim2.new(0, 15, 0, 60)
+            sliderContainer.Size = UDim2.new(1, -30, 0, 30)
+            sliderContainer.Visible = false
+            sliderContainer.ZIndex = 2
 
-            speedLabel = Instance.new("TextLabel", speedSliderContainer)
-            speedLabel.Size = UDim2.new(1, 0, 0.4, 0)
-            speedLabel.BackgroundTransparency = 1
-            speedLabel.Text = "Speed: " .. speed
-            speedLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
-            speedLabel.Font = Enum.Font.Gotham
-            speedLabel.TextSize = 12
-            speedLabel.TextXAlignment = Enum.TextXAlignment.Left
-            speedLabel.ZIndex = 3
+            local currentValue = isFlyMode and speedValue or (isSpeedMode and speedValue or jumpValue)
+            local minValue = isJumpMode and 50 or 10
+            local maxValue = isJumpMode and 500 or 200
+            
+            valueLabel = Instance.new("TextLabel")
+            valueLabel.Parent = sliderContainer
+            valueLabel.BackgroundTransparency = 1
+            valueLabel.Size = UDim2.new(1, 0, 0, 15)
+            valueLabel.Font = Enum.Font.Gotham
+            valueLabel.Text = (isFlyMode and "Fly Speed: " or (isSpeedMode and "Walk Speed: " or "Jump Power: ")) .. currentValue
+            valueLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+            valueLabel.TextSize = 12
+            valueLabel.TextXAlignment = Enum.TextXAlignment.Left
+            valueLabel.ZIndex = 3
 
-            -- SLIDER TRACK - FIXED BACKGROUND
-            sliderTrack = Instance.new("Frame", speedSliderContainer)
-            sliderTrack.Size = UDim2.new(1, 0, 0.3, 0)
-            sliderTrack.Position = UDim2.new(0, 0, 0.6, 0)
+            -- Slider track
+            sliderTrack = Instance.new("Frame")
+            sliderTrack.Parent = sliderContainer
             sliderTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-            sliderTrack.BackgroundTransparency = 0
             sliderTrack.BorderSizePixel = 0
+            sliderTrack.Position = UDim2.new(0, 0, 0, 15)
+            sliderTrack.Size = UDim2.new(1, 0, 0, 10)
             sliderTrack.ZIndex = 2
             
-            local trackCorner = Instance.new("UICorner", sliderTrack)
+            local trackCorner = Instance.new("UICorner")
+            trackCorner.Parent = sliderTrack
             trackCorner.CornerRadius = UDim.new(0, 5)
             
-            local trackStroke = Instance.new("UIStroke", sliderTrack)
+            local trackStroke = Instance.new("UIStroke")
+            trackStroke.Parent = sliderTrack
             trackStroke.Color = Color3.fromRGB(100, 100, 100)
             trackStroke.Thickness = 1
             trackStroke.Transparency = 0.3
 
-            -- SLIDER BUTTON - FIXED BACKGROUND
-            sliderButton = Instance.new("Frame", sliderTrack)
-            sliderButton.Size = UDim2.new(0.1, 0, 1.5, 0)
-            sliderButton.Position = UDim2.new((speed - 10) / 190, -7, 0, -3)
+            -- Slider button
+            sliderButton = Instance.new("Frame")
+            sliderButton.Parent = sliderTrack
             sliderButton.BackgroundColor3 = Color3.fromRGB(180, 0, 255)
             sliderButton.BackgroundTransparency = 0
             sliderButton.BorderSizePixel = 0
+            sliderButton.Size = UDim2.new(0, 15, 2, 0)
+            sliderButton.Position = UDim2.new((currentValue - minValue) / (maxValue - minValue), -7, 0, -2)
             sliderButton.ZIndex = 3
             
-            local buttonCorner = Instance.new("UICorner", sliderButton)
+            local buttonCorner = Instance.new("UICorner")
+            buttonCorner.Parent = sliderButton
             buttonCorner.CornerRadius = UDim.new(0, 5)
             
-            local glow = Instance.new("UIStroke", sliderButton)
+            local glow = Instance.new("UIStroke")
+            glow.Parent = sliderButton
             glow.Color = Color3.fromRGB(255, 0, 255)
             glow.Thickness = 2
             glow.Transparency = 0.2
 
             -- Slider drag functionality
             local drag = false
-            sliderTrack.InputBegan:Connect(function(i)
-                if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            sliderTrack.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
                     drag = true
                 end
             end)
 
-            UIS.InputEnded:Connect(function(i)
-                if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            UIS.InputEnded:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1 then
                     drag = false
                 end
             end)
 
-            UIS.InputChanged:Connect(function(i)
-                if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
-                    local x = math.clamp(i.Position.X - sliderTrack.AbsolutePosition.X, 0, sliderTrack.AbsoluteSize.X)
-                    sliderButton.Position = UDim2.new(x / sliderTrack.AbsoluteSize.X, -7, 0, -3)
-                    speed = math.floor(x / sliderTrack.AbsoluteSize.X * 190) + 10
-                    speedLabel.Text = "Speed: " .. speed
+            UIS.InputChanged:Connect(function(input)
+                if drag and input.UserInputType == Enum.UserInputType.MouseMovement then
+                    local x = math.clamp(input.Position.X - sliderTrack.AbsolutePosition.X, 0, sliderTrack.AbsoluteSize.X)
+                    sliderButton.Position = UDim2.new(x / sliderTrack.AbsoluteSize.X, -7, 0, -2)
+                    local newValue = math.floor(x / sliderTrack.AbsoluteSize.X * (maxValue - minValue)) + minValue
+                    
+                    if isFlyMode then
+                        speedValue = newValue
+                        valueLabel.Text = "Fly Speed: " .. speedValue
+                    elseif isSpeedMode then
+                        speedValue = newValue
+                        valueLabel.Text = "Walk Speed: " .. speedValue
+                        if speedEnabled then
+                            hum.WalkSpeed = speedValue
+                        end
+                    elseif isJumpMode then
+                        jumpValue = newValue
+                        valueLabel.Text = "Jump Power: " .. jumpValue
+                        if jumpEnabled then
+                            hum.JumpPower = jumpValue
+                        end
+                    end
                 end
             end)
         end
 
+        -- Toggle button
         local toggleBg = Instance.new("TextButton")
         toggleBg.Name = "ToggleBg"
         toggleBg.Parent = toggleFrame
         toggleBg.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
         toggleBg.BackgroundTransparency = 0
         toggleBg.BorderSizePixel = 0
-        toggleBg.Position = UDim2.new(1, -80, 0, 20)
+        toggleBg.Position = UDim2.new(1, -80, 0, 15)
         toggleBg.Size = UDim2.new(0, 60, 0, 25)
         toggleBg.Text = ""
         toggleBg.AutoButtonColor = false
@@ -780,11 +1242,8 @@ local function CreateModernGUI()
                 statusLabel.Text = "Status: ON"
                 statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
                 
-                if isFlyMode and speedSliderContainer then
-                    speedSliderContainer.Visible = true
-                    TweenService:Create(speedSliderContainer, TweenInfo.new(0.3), {
-                        BackgroundTransparency = 1
-                    }):Play()
+                if (isFlyMode or isSpeedMode or isJumpMode) and sliderContainer then
+                    sliderContainer.Visible = true
                 end
             else
                 toggleBg.BackgroundColor3 = Color3.fromRGB(80, 0, 0)
@@ -795,12 +1254,8 @@ local function CreateModernGUI()
                 statusLabel.Text = "Status: OFF"
                 statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
                 
-                if isFlyMode and speedSliderContainer then
-                    TweenService:Create(speedSliderContainer, TweenInfo.new(0.3), {
-                        BackgroundTransparency = 1
-                    }):Play()
-                    wait(0.3)
-                    speedSliderContainer.Visible = false
+                if (isFlyMode or isSpeedMode or isJumpMode) and sliderContainer then
+                    sliderContainer.Visible = false
                 end
             end
         end
@@ -814,11 +1269,43 @@ local function CreateModernGUI()
                 else
                     startFly()
                 end
+            elseif isSpeedMode then
+                if isEnabled then
+                    stopSpeed()
+                else
+                    startSpeed()
+                end
+            elseif isJumpMode then
+                if isEnabled then
+                    stopJump()
+                else
+                    startJump()
+                end
             else
-                if text == "Invisibility" then
+                if text == "Invisible" then
                     toggleInvisibility()
                 elseif text == "No Clip" then
-                    toggleNoClip()
+                    if isEnabled then
+                        stopNoClip()
+                    else
+                        startNoClip()
+                    end
+                elseif text == "ESP Players" then
+                    toggleESP()
+                elseif text == "X-Ray Vision" then
+                    toggleXRay()
+                elseif text == "Full Bright" then
+                    toggleFullBright()
+                elseif text == "Anti-AFK" then
+                    enableAntiAFK()
+                elseif text == "Disable 3D Rendering" then
+                    toggleDisable3DRendering()
+                elseif text == "Black Screen" then
+                    toggleBlackScreen()
+                elseif text == "White Screen" then
+                    toggleWhiteScreen()
+                elseif text == "Disable Notification" then
+                    toggleDisableNotification()
                 end
             end
             
@@ -844,15 +1331,46 @@ local function CreateModernGUI()
         }
     end
 
+    -- Function to create button
+    local function CreateButton(parent, text, icon, onClick)
+        local button = Instance.new("TextButton")
+        button.Parent = parent
+        button.BackgroundColor3 = Color3.fromRGB(60, 0, 90)
+        button.BackgroundTransparency = 0.3
+        button.BorderSizePixel = 0
+        button.Size = UDim2.new(0, 480, 0, 50)
+        button.Font = Enum.Font.GothamBold
+        button.Text = "   " .. (icon or "⭐") .. "  " .. text
+        button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        button.TextSize = 14
+        button.AutoButtonColor = true
+        button.ZIndex = 2
+        
+        local buttonCorner = Instance.new("UICorner")
+        buttonCorner.Parent = button
+        buttonCorner.CornerRadius = UDim.new(0, 8)
+        
+        local buttonStroke = Instance.new("UIStroke")
+        buttonStroke.Parent = button
+        buttonStroke.Color = Color3.fromRGB(120, 80, 180)
+        buttonStroke.Thickness = 2
+        buttonStroke.Transparency = 0.3
+
+        button.MouseButton1Click:Connect(onClick)
+
+        return button
+    end
+
+    -- Confirmation dialog functions
     local function ShowConfirmationDialog()
         ConfirmationOverlay.Visible = true
         ConfirmationDialog.Position = UDim2.new(0.5, -175, 0.3, -100)
         
-        TweenService:Create(ConfirmationDialog, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        TS:Create(ConfirmationDialog, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Position = UDim2.new(0.5, -175, 0.5, -100)
         }):Play()
         
-        TweenService:Create(ConfirmationOverlay, TweenInfo.new(0.3), {
+        TS:Create(ConfirmationOverlay, TweenInfo.new(0.3), {
             BackgroundTransparency = 0.5
         }):Play()
         
@@ -860,11 +1378,11 @@ local function CreateModernGUI()
     end
 
     local function HideConfirmationDialog()
-        TweenService:Create(ConfirmationDialog, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        TS:Create(ConfirmationDialog, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
             Position = UDim2.new(0.5, -175, 0.3, -100)
         }):Play()
         
-        TweenService:Create(ConfirmationOverlay, TweenInfo.new(0.3), {
+        TS:Create(ConfirmationOverlay, TweenInfo.new(0.3), {
             BackgroundTransparency = 0.7
         }):Play()
         
@@ -874,13 +1392,13 @@ local function CreateModernGUI()
     end
 
     local function CloseGUI()
-        TweenService:Create(MainContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        TS:Create(MainContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
             Size = UDim2.new(0, 0, 0, 0),
             Position = UDim2.new(0.5, 0, 0.5, 0),
             BackgroundTransparency = 1
         }):Play()
         
-        TweenService:Create(LogoButton, TweenInfo.new(0.4), {
+        TS:Create(LogoButton, TweenInfo.new(0.4), {
             Size = UDim2.new(0, 0, 0, 0),
             BackgroundTransparency = 1
         }):Play()
@@ -889,46 +1407,104 @@ local function CreateModernGUI()
         ScreenGui:Destroy()
     end
 
+    -- Create content for each page
     local homePage = PagesFolder:FindFirstChild("HomePage")
     if homePage then
         CreateWelcomePanel(homePage)
         
         CreateFeatureCard(homePage, "Fly Mode System", "Terbang bebas dengan kontrol kecepatan yang dapat disesuaikan", "✈️")
-        CreateFeatureCard(homePage, "Invisibility Mode", "Menjadi tak terlihat oleh pemain lain", "👻")
-        CreateFeatureCard(homePage, "Bounce Animations", "Animasi smooth saat show/hide GUI dengan efek memantul", "✨")
+        CreateFeatureCard(homePage, "Speed & Jump Boost", "Tingkatkan kecepatan berjalan dan kekuatan lompat dengan slider", "💨")
+        CreateFeatureCard(homePage, "ESP & X-Ray Vision", "Lihat pemain melalui dinding dan highlight semua pemain", "👁️")
+        CreateFeatureCard(homePage, "Teleport System", "Teleport ke pemain dengan player list dan search real-time", "🚀")
+        CreateFeatureCard(homePage, "Misc Features", "Anti-AFK, Screen Effects, dan berbagai fitur tambahan lainnya", "🔧")
     end
 
     local playerPage = PagesFolder:FindFirstChild("PlayerPage")
     local visualsPage = PagesFolder:FindFirstChild("VisualsPage")
-    local worldPage = PagesFolder:FindFirstChild("WorldPage")
+    local miscPage = PagesFolder:FindFirstChild("MiscPage") -- Diubah dari WorldPage menjadi MiscPage
+    local teleportPage = PagesFolder:FindFirstChild("TeleportPage")
     local settingsPage = PagesFolder:FindFirstChild("SettingsPage")
 
-    -- Player Page dengan Fly Mode dan fitur lainnya
+    -- Player Page - ANTI-AFK DIPINDAHKAN KE MISC
     if playerPage then
-        CreateToggleSlider(playerPage, "Fly Mode", "✈️", false, true)
-        CreateToggleSlider(playerPage, "Invisibility", "🌀", false)
-        CreateToggleSlider(playerPage, "Speed Hack", "💨", false)
+        CreateToggleSlider(playerPage, "Fly Mode", "✈️", false, true, false, false)
+        CreateToggleSlider(playerPage, "Speed Boost", "💨", false, false, true, false)
+        CreateToggleSlider(playerPage, "Jump Boost", "🦘", false, false, false, true)
+        CreateToggleSlider(playerPage, "Invisible", "🌀", false, false, false, false)
+        CreateToggleSlider(playerPage, "No Clip", "🚫", false, false, false, false)
+        -- Anti-AFK dipindahkan ke Misc
     end
 
+    -- Visuals Page
     if visualsPage then
-        CreateToggleSlider(visualsPage, "ESP Players", "🎯", false)
-        CreateToggleSlider(visualsPage, "X-Ray Vision", "🔍", false)
-        CreateToggleSlider(visualsPage, "Full Bright", "💡", true)
-        CreateToggleSlider(visualsPage, "Chams", "🌈", false)
+        CreateToggleSlider(visualsPage, "ESP Players", "🎯", false, false, false, false)
+        CreateToggleSlider(visualsPage, "X-Ray Vision", "🔍", false, false, false, false)
+        CreateToggleSlider(visualsPage, "Full Bright", "💡", false, false, false, false)
     end
 
-    if worldPage then
-        CreateToggleSlider(worldPage, "Night Vision", "🌙", false)
-        CreateToggleSlider(worldPage, "Fog Remover", "🌫️", true)
-        CreateToggleSlider(worldPage, "Time Changer", "⏰", false)
+    -- Misc Page - TAB BARU DENGAN FITUR-FITUR TAMBAHAN
+    if miscPage then
+        -- Fitur yang dipindahkan dari Player
+        CreateToggleSlider(miscPage, "Anti-AFK", "⏰", false, false, false, false)
+        
+        -- Fitur-fitur baru
+        CreateToggleSlider(miscPage, "Disable 3D Rendering", "🖥️", false, false, false, false)
+        CreateToggleSlider(miscPage, "Black Screen", "⬛", false, false, false, false)
+        CreateToggleSlider(miscPage, "White Screen", "⬜", false, false, false, false)
+        CreateToggleSlider(miscPage, "Disable Notification", "🔕", false, false, false, false)
+        
+        -- Tombol reset
+        CreateButton(miscPage, "Reset All Effects", "🔄", function()
+            -- Reset semua efek misc
+            if disable3DRendering then
+                toggleDisable3DRendering()
+            end
+            if blackScreenEnabled then
+                toggleBlackScreen()
+            end
+            if whiteScreenEnabled then
+                toggleWhiteScreen()
+            end
+            if disableNotificationEnabled then
+                toggleDisableNotification()
+            end
+            StatusLabel.Text = "Status: All Misc effects reset"
+        end)
     end
 
+    -- Teleport Page
+    if teleportPage then
+        -- Player List dengan Search Real-time
+        CreatePlayerListFrame(teleportPage)
+        
+        -- Predefined locations
+        CreateButton(teleportPage, "Teleport to Spawn", "🏠", function()
+            local spawnLocation = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChild("Spawn")
+            if spawnLocation then
+                root.CFrame = spawnLocation.CFrame
+            else
+                root.CFrame = CFrame.new(0, 100, 0)
+            end
+            StatusLabel.Text = "Status: Teleported to spawn"
+        end)
+
+        CreateButton(teleportPage, "Teleport to Sky", "☁️", function()
+            root.CFrame = CFrame.new(root.Position.X, root.Position.Y + 1000, root.Position.Z)
+            StatusLabel.Text = "Status: Teleported to sky"
+        end)
+    end
+
+    -- Settings Page
     if settingsPage then
-        CreateToggleSlider(settingsPage, "UI Sounds", "🔊", true)
-        CreateToggleSlider(settingsPage, "Auto Save", "💾", false)
-        CreateToggleSlider(settingsPage, "Notifications", "🔔", true)
+        CreateToggleSlider(settingsPage, "Auto Save Config", "💾", false, false, false, false)
+        CreateToggleSlider(settingsPage, "UI Sound Effects", "🔊", false, false, false, false)
+        
+        CreateButton(settingsPage, "Reset All Settings", "🔄", function()
+            StatusLabel.Text = "Status: Settings reset"
+        end)
     end
 
+    -- GUI Show/Hide functions
     local function ShowGUIWithBounce()
         guiVisible = true
         
@@ -944,25 +1520,25 @@ local function CreateModernGUI()
         MainContainer.Size = UDim2.new(0, 50, 0, 50)
         MainContainer.Visible = true
         
-        TweenService:Create(LogoButton, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        TS:Create(LogoButton, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Rotation = 360,
             Size = UDim2.new(0, 70, 0, 70)
         }):Play()
         
         wait(0.2)
         
-        TweenService:Create(MainContainer, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        TS:Create(MainContainer, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
             Position = mainContainerPos,
-            Size = UDim2.new(0, 650, 0, 500)
+            Size = UDim2.new(0, 700, 0, 550)
         }):Play()
         
         wait(0.1)
         
-        TweenService:Create(MainContainer, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 600, 0, 450)
+        TS:Create(MainContainer, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 650, 0, 500)
         }):Play()
         
-        TweenService:Create(LogoButton, TweenInfo.new(0.3), {
+        TS:Create(LogoButton, TweenInfo.new(0.3), {
             Size = UDim2.new(0, 60, 0, 60),
             Rotation = 0
         }):Play()
@@ -973,13 +1549,13 @@ local function CreateModernGUI()
     local function HideGUIWithBounce()
         local logoPos = LogoButton.Position
         
-        TweenService:Create(MainContainer, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = UDim2.new(0, 620, 0, 470)
+        TS:Create(MainContainer, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 670, 0, 520)
         }):Play()
         
         wait(0.1)
         
-        TweenService:Create(MainContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+        TS:Create(MainContainer, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
             Position = UDim2.new(
                 logoPos.X.Scale,
                 logoPos.X.Offset + 30,
@@ -989,7 +1565,7 @@ local function CreateModernGUI()
             Size = UDim2.new(0, 50, 0, 50)
         }):Play()
         
-        TweenService:Create(LogoButton, TweenInfo.new(0.4), {
+        TS:Create(LogoButton, TweenInfo.new(0.4), {
             Rotation = -360,
             Size = UDim2.new(0, 70, 0, 70)
         }):Play()
@@ -997,7 +1573,7 @@ local function CreateModernGUI()
         wait(0.4)
         
         MainContainer.Visible = false
-        TweenService:Create(LogoButton, TweenInfo.new(0.3), {
+        TS:Create(LogoButton, TweenInfo.new(0.3), {
             Size = UDim2.new(0, 60, 0, 60),
             Rotation = 0
         }):Play()
@@ -1006,6 +1582,7 @@ local function CreateModernGUI()
         StatusLabel.Text = "Status: GUI Hidden with Bounce"
     end
 
+    -- Draggable functions
     local function MakeDraggable(frame, dragHandle)
         local dragStart = nil
         local startPos = nil
@@ -1078,6 +1655,7 @@ local function CreateModernGUI()
         end
     end
 
+    -- Connect events
     MakeDraggable(MainContainer, TopBar)
     MakeLogoDraggable(LogoButton)
 
@@ -1090,11 +1668,11 @@ local function CreateModernGUI()
     end)
 
     YesButton.MouseButton1Click:Connect(function()
-        TweenService:Create(YesButton, TweenInfo.new(0.1), {
+        TS:Create(YesButton, TweenInfo.new(0.1), {
             Size = UDim2.new(0, 110, 0, 35)
         }):Play()
         wait(0.1)
-        TweenService:Create(YesButton, TweenInfo.new(0.1), {
+        TS:Create(YesButton, TweenInfo.new(0.1), {
             Size = UDim2.new(0, 120, 0, 40)
         }):Play()
         
@@ -1105,11 +1683,11 @@ local function CreateModernGUI()
     end)
 
     NoButton.MouseButton1Click:Connect(function()
-        TweenService:Create(NoButton, TweenInfo.new(0.1), {
+        TS:Create(NoButton, TweenInfo.new(0.1), {
             Size = UDim2.new(0, 110, 0, 35)
         }):Play()
         wait(0.1)
-        TweenService:Create(NoButton, TweenInfo.new(0.1), {
+        TS:Create(NoButton, TweenInfo.new(0.1), {
             Size = UDim2.new(0, 120, 0, 40)
         }):Play()
         
@@ -1121,6 +1699,7 @@ local function CreateModernGUI()
         ToggleGUI()
     end)
 
+    -- Clock update
     local function UpdateClock()
         while wait(1) do
             local currentTime = os.date("%H:%M:%S")
@@ -1130,25 +1709,24 @@ local function CreateModernGUI()
 
     spawn(UpdateClock)
 
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "PURPLE HUB v6.0 Loaded!",
-        Text = "Fly Mode dengan Speed Control aktif!",
-        Duration = 5,
-    })
-
-    print("🎮 PURPLE HUB v6.0 BERHASIL DIMUAT!")
-    print("✈️  Fly Mode dengan Speed Slider terintegrasi")
-    print("👻  Invisibility Mode aktif")
-    print("🚫  No Clip Mode aktif")
-    print("✨  Bounce Animation + Drag System aktif")
-    
     return ScreenGui
 end
 
--- Execute GUI
-local success, result = pcall(CreateModernGUI)
+-- Execute GUI dengan error handling
+local success, result = pcall(function()
+    local gui = CreateModernGUI()
+    
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "PURPLE HUB v6.0 ULTIMATE Loaded!",
+        Text = "Misc Tab dengan Fitur Baru Aktif!",
+        Duration = 5,
+    })
+
+    return gui
+end)
+
 if success then
-    print("✅ PURPLE HUB v6.0 created successfully!")
+    -- Print dihapus sesuai permintaan
 else
-    print("❌ Error creating GUI: " .. tostring(result))
+    -- Print dihapus sesuai permintaan
 end
