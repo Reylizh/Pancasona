@@ -156,7 +156,7 @@ function startAntiAFK()
                 wait(0.1)
                 char.Humanoid.Jump = true
             end
-            wait(math.random(2, 5)) 
+            wait(math.random(0.5, 0.7)) 
         end
     end)
     
