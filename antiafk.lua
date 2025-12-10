@@ -1,4 +1,4 @@
---loadstring(game:HttpGet("", true))()
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/antiafk.lua", true))()
 
 
 local Players = game:GetService("Players")
