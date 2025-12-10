@@ -1,425 +1,467 @@
--- Fixed Advanced Checkpoint & Summit Detector
+
+--loadstring(game:HttpGet("", true))()
+
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local TweenService = game:GetService("TweenService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local PLAYER = Players.LocalPlayer
+local Stats = game:GetService("Stats")
 
--- Pastikan CoreGui tersedia
-if not game:GetService("CoreGui") then
-    warn("CoreGui not available!")
-    return
-end
+local PLACE_ID = 126884695634066
+local SCRIPT_URL = "https://pastebin.com/raw/YOUR_PASTE_ID_HERE"  -- GANTI INI!
 
--- Hapus GUI lama jika ada
-if game:GetService("CoreGui"):FindFirstChild("AdvancedCheckpointTeleporter") then
-    game:GetService("CoreGui"):FindFirstChild("AdvancedCheckpointTeleporter"):Destroy()
-end
+-- ================== CONFIG ==================
+local PRIME_BOOTHS = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
+local BACKUP_BOOTHS = {16,17,18,19,20,21,22,23,24,25,26,27,28,29,30}
+local DEFAULT_HOP_INTERVAL = 3600  -- 1 jam default
+local MAX_PLAYERS_HOP = 20  -- Hop low player
+local CLAIM_DELAY = 0.3
+-- ===========================================
 
--- Buat GUI sederhana yang work
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AdvancedCheckpointTeleporter"
-screenGui.Parent = game:GetService("CoreGui")
+-- Colors UNGU KEREN
+local Colors = {
+    Dark = Color3.fromRGB(76, 29, 149),
+    Primary = Color3.fromRGB(139, 92, 246),
+    Secondary = Color3.fromRGB(167, 139, 250),
+    Light = Color3.fromRGB(236, 234, 255),
+    Accent = Color3.fromRGB(168, 85, 247),
+    Error = Color3.fromRGB(239, 68, 68),
+    Success = Color3.fromRGB(34, 197, 94)
+}
 
--- Main Frame
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 350, 0, 500)
-mainFrame.Position = UDim2.new(0, 10, 0, 10)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-mainFrame.BorderSizePixel = 0
-mainFrame.ClipsDescendants = true
-mainFrame.Parent = screenGui
+-- Variables
+local autoClaim = true
+local autoHop = false
+local hopInterval = DEFAULT_HOP_INTERVAL
+local autoTravel = true
+local antiAFK = true
+local autoRelist = false
+local minimized = false
+local currentBooth = "None"
+local nextHopTime = 0
+local pingValue = 0
+local playerCount = 0
+local rapData = "Click Update RAP"
 
--- Title
+-- GUI Creation
+local sg = Instance.new("ScreenGui")
+sg.Name = "BoothHunterGUI"
+sg.Parent = PLAYER:WaitForChild("PlayerGui")
+sg.ResetOnSpawn = false
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Parent = sg
+MainFrame.AnchorPoint = Vector2.new(0.5, 0.05)
+MainFrame.BackgroundColor3 = Colors.Dark
+MainFrame.Position = UDim2.new(0.5, 0, 0.1, 0)
+MainFrame.Size = UDim2.new(0, 420, 0, 520)
+MainFrame.Active = true
+MainFrame.Draggable = false  -- Custom drag
+
+-- Gradient BG
+local grad = Instance.new("UIGradient")
+grad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Colors.Dark),
+    ColorSequenceKeypoint.new(1, Colors.Primary)
+}
+grad.Rotation = 45
+grad.Parent = MainFrame
+
+-- Corner & Stroke
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 16)
+corner.Parent = MainFrame
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Colors.Accent
+stroke.Thickness = 2
+stroke.Transparency = 0.5
+stroke.Parent = MainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Parent = MainFrame
+titleBar.BackgroundTransparency = 1
+titleBar.Size = UDim2.new(1, 0, 0, 50)
+
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
-title.Position = UDim2.new(0, 0, 0, 0)
-title.BackgroundColor3 = Color3.fromRGB(45, 45, 60)
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.Text = "🎯 CHECKPOINT FINDER"
+title.Name = "Title"
+title.Parent = titleBar
+title.BackgroundTransparency = 1
+title.Position = UDim2.new(0, 15, 0, 0)
+title.Size = UDim2.new(0.7, 0, 1, 0)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 16
-title.Parent = mainFrame
+title.Text = "🛒 Farmers Market Booth Hunter v3.0"
+title.TextColor3 = Colors.Light
+title.TextSize = 18
+title.TextXAlignment = Enum.TextXAlignment.Left
 
--- Status Label
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -10, 0, 20)
-statusLabel.Position = UDim2.new(0, 5, 0, 45)
-statusLabel.BackgroundTransparency = 1
-statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-statusLabel.Text = "Loading..."
-statusLabel.TextSize = 12
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.Parent = mainFrame
+local minBtn = Instance.new("TextButton")
+minBtn.Name = "Minimize"
+minBtn.Parent = titleBar
+minBtn.BackgroundTransparency = 1
+minBtn.Position = UDim2.new(1, -50, 0, 0)
+minBtn.Size = UDim2.new(0, 40, 1, 0)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.Text = "−"
+minBtn.TextColor3 = Colors.Light
+minBtn.TextSize = 24
 
--- Scrolling Frame untuk results
-local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, -10, 1, -160)
-scrollFrame.Position = UDim2.new(0, 5, 0, 70)
-scrollFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-scrollFrame.ScrollBarThickness = 8
-scrollFrame.Parent = mainFrame
+-- Content ScrollingFrame
+local content = Instance.new("ScrollingFrame")
+content.Name = "Content"
+content.Parent = MainFrame
+content.BackgroundTransparency = 1
+content.Position = UDim2.new(0, 0, 0, 50)
+content.Size = UDim2.new(1, 0, 1, -50)
+content.ScrollBarThickness = 6
+content.ScrollBarImageColor3 = Colors.Secondary
+content.CanvasSize = UDim2.new(0, 0, 0, 800)  -- Expand as needed
 
-local UIListLayout = Instance.new("UIListLayout")
-UIListLayout.Padding = UDim.new(0, 5)
-UIListLayout.Parent = scrollFrame
+-- UIListLayout for content
+local layout = Instance.new("UIListLayout")
+layout.Parent = content
+layout.Padding = UDim.new(0, 8)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.FillDirection = Enum.FillDirection.Vertical
 
--- Control Panel
-local controlFrame = Instance.new("Frame")
-controlFrame.Size = UDim2.new(1, -10, 0, 80)
-controlFrame.Position = UDim2.new(0, 5, 1, -85)
-controlFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-controlFrame.Parent = mainFrame
-
--- Variabel
-local checkpoints = {}
-local autoRefresh = true
-
--- ==================== SIMPLE DETECTION FUNCTION ====================
-
-function simpleDetection()
-    local found = {}
-    
-    -- Method 1: Cari berdasarkan nama
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Part") or obj:IsA("MeshPart") or obj:IsA("Model") then
-            local name = string.lower(obj.Name)
-            local fullName = string.lower(obj:GetFullName())
-            
-            -- Keywords untuk checkpoint
-            local checkpointWords = {
-                "checkpoint", "cp", "save", "spawn", "respawn", 
-                "point", "flag", "marker", "spot", "location"
-            }
-            
-            -- Keywords untuk stage/level
-            local stageWords = {
-                "stage", "level", "phase", "part", "section",
-                "floor", "platform", "area", "zone", "region"
-            }
-            
-            -- Keywords untuk finish
-            local finishWords = {
-                "finish", "end", "complete", "victory", "win", 
-                "final", "goal", "winner", "summit", "top"
-            }
-            
-            -- Cek semua keywords
-            for _, word in ipairs(checkpointWords) do
-                if string.find(name, word) or string.find(fullName, word) then
-                    table.insert(found, {
-                        Object = obj,
-                        Type = "Checkpoint",
-                        Confidence = 90
-                    })
-                    break
-                end
-            end
-            
-            for _, word in ipairs(stageWords) do
-                if string.find(name, word) or string.find(fullName, word) then
-                    table.insert(found, {
-                        Object = obj,
-                        Type = "Stage",
-                        Confidence = 80
-                    })
-                    break
-                end
-            end
-            
-            for _, word in ipairs(finishWords) do
-                if string.find(name, word) or string.find(fullName, word) then
-                    table.insert(found, {
-                        Object = obj,
-                        Type = "Finish",
-                        Confidence = 95
-                    })
-                    break
-                end
-            end
-        end
+-- Drag Logic
+local dragging, dragStart, startPos
+titleBar.InputBegan:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = inp.Position
+        startPos = MainFrame.Position
     end
-    
-    -- Method 2: Cari part dengan posisi tinggi (potential summit)
-    local highestParts = {}
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Part") and obj.Position.Y > 50 then
-            table.insert(highestParts, {
-                Object = obj,
-                Type = "High Platform",
-                Confidence = math.min(70, obj.Position.Y / 10)
-            })
-        end
+end)
+
+titleBar.InputChanged:Connect(function(inp)
+    if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = inp.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
-    
-    -- Sort by height dan ambil top 10
-    table.sort(highestParts, function(a, b)
-        return a.Object.Position.Y > b.Object.Position.Y
+end)
+
+titleBar.InputEnded:Connect(function(inp)
+    if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
+
+-- Minimize Toggle
+minBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    minBtn.Text = minimized and "+" or "−"
+    local tween = TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Size = minimized and UDim2.new(0, 200, 0, 60) or UDim2.new(0, 420, 0, 520)})
+    tween:Play()
+    content.Visible = not minimized
+end)
+
+-- Helper: Create Toggle
+local function createToggle(name, defaultVal, callback)
+    local togFrame = Instance.new("Frame")
+    togFrame.Name = name .. "Toggle"
+    togFrame.Parent = content
+    togFrame.BackgroundTransparency = 1
+    togFrame.Size = UDim2.new(1, -20, 0, 45)
+    togFrame.LayoutOrder = #content:GetChildren()
+
+    local label = Instance.new("TextLabel")
+    label.Parent = togFrame
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(0.6, 0, 1, 0)
+    label.Font = Enum.Font.GothamSemibold
+    label.Text = "  " .. name
+    label.TextColor3 = Colors.Light
+    label.TextSize = 15
+    label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local togBtn = Instance.new("TextButton")
+    togBtn.Parent = togFrame
+    togBtn.AnchorPoint = Vector2.new(1, 0.5)
+    togBtn.BackgroundColor3 = defaultVal and Colors.Success or Colors.Error
+    togBtn.Position = UDim2.new(0.85, 0, 0.5, 0)
+    togBtn.Size = UDim2.new(0, 70, 0, 32)
+    togBtn.Font = Enum.Font.GothamBold
+    togBtn.Text = defaultVal and "ON" or "OFF"
+    togBtn.TextColor3 = Colors.Light
+    togBtn.TextSize = 14
+
+    local togCorner = Instance.new("UICorner")
+    togCorner.CornerRadius = UDim.new(0, 10)
+    togCorner.Parent = togBtn
+
+    local togGrad = Instance.new("UIGradient")
+    togGrad.Color = ColorSequence.new{ColorSequenceKeypoint.new(0, Colors.Primary), ColorSequenceKeypoint.new(1, Colors.Accent)}
+    togGrad.Parent = togBtn
+
+    togBtn.MouseButton1Click:Connect(function()
+        local newState = not defaultVal
+        callback(newState)
+        togBtn.BackgroundColor3 = newState and Colors.Success or Colors.Error
+        togBtn.Text = newState and "ON" or "OFF"
     end)
-    
-    for i = 1, math.min(10, #highestParts) do
-        table.insert(found, highestParts[i])
+end
+
+-- Helper: Create Button
+local function createButton(name, callback, layoutOrder)
+    local btn = Instance.new("TextButton")
+    btn.Name = name
+    btn.Parent = content
+    btn.BackgroundColor3 = Colors.Primary
+    btn.Size = UDim2.new(1, -20, 0, 40)
+    btn.Font = Enum.Font.GothamBold
+    btn.Text = name
+    btn.TextColor3 = Colors.Light
+    btn.TextSize = 14
+    btn.LayoutOrder = layoutOrder or #content:GetChildren()
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 12)
+    btnCorner.Parent = btn
+
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Color = Colors.Accent
+    btnStroke.Thickness = 1.5
+    btnStroke.Parent = btn
+
+    btn.MouseButton1Click:Connect(callback)
+    btn.MouseEnter:Connect(function() btn.BackgroundColor3 = Colors.Accent end)
+    btn.MouseLeave:Connect(function() btn.BackgroundColor3 = Colors.Primary end)
+end
+
+-- Helper: Create Label
+local function createLabel(text, layoutOrder)
+    local lbl = Instance.new("TextLabel")
+    lbl.Parent = content
+    lbl.BackgroundTransparency = 1
+    lbl.Size = UDim2.new(1, -20, 0, 30)
+    lbl.Font = Enum.Font.Gotham
+    lbl.Text = text
+    lbl.TextColor3 = Colors.Light
+    lbl.TextSize = 13
+    lbl.LayoutOrder = layoutOrder or #content:GetChildren()
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+end
+
+-- Create Toggles & UI
+createToggle("Auto Claim Booth", autoClaim, function(state) autoClaim = state end)
+createToggle("Auto Travel FM", autoTravel, function(state) autoTravel = state end)
+createToggle("Auto Hop Server", autoHop, function(state) autoHop = state end)
+createToggle("Anti AFK", antiAFK, function(state) antiAFK = state end)
+createToggle("Auto Relist", autoRelist, function(state) autoRelist = state end)
+
+-- Hop Interval
+local intervalFrame = Instance.new("Frame")
+intervalFrame.Parent = content
+intervalFrame.BackgroundTransparency = 1
+intervalFrame.Size = UDim2.new(1, -20, 0, 45)
+
+local intLabel = Instance.new("TextLabel")
+intLabel.Parent = intervalFrame
+intLabel.BackgroundTransparency = 1
+intLabel.Size = UDim2.new(0.5, 0, 1, 0)
+intLabel.Font = Enum.Font.GothamSemibold
+intLabel.Text = "Hop Interval (s):"
+intLabel.TextColor3 = Colors.Light
+intLabel.TextSize = 15
+
+local intBox = Instance.new("TextBox")
+intBox.Parent = intervalFrame
+intBox.AnchorPoint = Vector2.new(0, 0.5)
+intBox.BackgroundColor3 = Colors.Secondary
+intBox.Position = UDim2.new(0.55, 0, 0.5, 0)
+intBox.Size = UDim2.new(0, 100, 0, 32)
+intBox.Font = Enum.Font.Gotham
+intBox.Text = tostring(hopInterval)
+intBox.TextColor3 = Colors.Light
+intBox.PlaceholderText = "3600"
+intBox.TextSize = 14
+
+local intCorner = Instance.new("UICorner")
+intCorner.CornerRadius = UDim.new(0, 8)
+intCorner.Parent = intBox
+
+intBox.FocusLost:Connect(function()
+    local num = tonumber(intBox.Text)
+    if num and num > 60 then
+        hopInterval = num
+        nextHopTime = tick() + hopInterval
+    else
+        intBox.Text = tostring(hopInterval)
     end
-    
-    -- Method 3: Cari part dengan size tertentu (platform)
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Part") then
-            local size = obj.Size
-            -- Platform biasanya datar (Y kecil, X/Z besar)
-            if size.Y < 5 and size.X > 4 and size.Z > 4 and obj.Position.Y > 10 then
-                table.insert(found, {
-                    Object = obj,
-                    Type = "Platform",
-                    Confidence = 60
-                })
+end)
+
+-- Buttons
+createButton("Hop Now", hopServer)
+createButton("Claim Now", claimBooth)
+createButton("Travel Now", travelToFarmersMarket)
+createButton("Update RAP", updateRAP)
+createButton("Copy Value Site", function() setclipboard("https://growagarden.gg/value-list") print("✅ Value List copied!") end)
+
+-- Status Labels (updated in loop)
+local statusBooth = createLabel("Booth: " .. currentBooth, 100)
+local statusPing = createLabel("Ping: -- ms | Players: --", 101)
+local statusNextHop = createLabel("Next Hop: --", 102)
+local statusRAP = createLabel("RAP: " .. rapData, 103)
+local statusTokens = createLabel("Tokens: --", 104)
+
+-- Functions (same as before + new)
+local function hopServer()
+    pcall(function()
+        local servers = HttpService:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..PLACE_ID.."/servers/Public?sortOrder=Asc&limit=100"))
+        local good = {}
+        for _, v in pairs(servers.data) do
+            if v.playing < MAX_PLAYERS_HOP and v.playing < v.maxPlayers and v.id ~= game.JobId then
+                table.insert(good, v.id)
             end
         end
-    end
-    
-    -- Remove duplicates
-    local uniqueFound = {}
-    local handled = {}
-    
-    for _, item in ipairs(found) do
-        if not handled[item.Object] then
-            table.insert(uniqueFound, item)
-            handled[item.Object] = true
+        if #good > 0 then
+            TeleportService:TeleportToPlaceInstance(PLACE_ID, good[math.random(1,#good)])
         end
-    end
-    
-    -- Sort by confidence
-    table.sort(uniqueFound, function(a, b)
-        return a.Confidence > b.Confidence
     end)
-    
-    return uniqueFound
 end
 
--- ==================== TELEPORT FUNCTION ====================
-
-function teleportToObject(obj)
-    local character = LocalPlayer.Character
-    if not character then
-        warn("No character found!")
-        return false
-    end
-    
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then
-        warn("No HumanoidRootPart found!")
-        return false
-    end
-    
-    -- Dapatkan posisi object
-    local targetPos = obj.Position
-    if obj:IsA("Model") then
-        targetPos = obj:GetPivot().Position
-    end
-    
-    -- Teleport ke atas object
-    humanoidRootPart.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
-    
-    return true
-end
-
-function findSummit()
-    local highest = nil
-    local highestY = -math.huge
-    
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("Part") then
-            if obj.Position.Y > highestY then
-                highestY = obj.Position.Y
-                highest = obj
+local function travelToFarmersMarket()
+    wait(2)
+    pcall(function()
+        local pgui = PLAYER.PlayerGui
+        local tradeGui = pgui:FindFirstChild("Trade") or pgui:FindFirstChild("TradingGUI") or pgui:FindFirstChild("TradeFrame")
+        if tradeGui then
+            local btn = tradeGui:FindFirstChild("TravelToFarmersMarket", true) or tradeGui:FindFirstChild("Travel", true)
+            if btn then btn:Activate() return end
+        end
+        -- Portal fallback
+        for _, obj in pairs(workspace:GetChildren()) do
+            if (obj.Name:lower():find("farmers") or obj.Name:lower():find("trade") or obj.Name:lower():find("portal")) and obj:FindFirstChildOfClass("ClickDetector") then
+                fireclickdetector(obj:FindFirstChildOfClass("ClickDetector"))
+                return
             end
         end
-    end
-    
-    return highest
+    end)
 end
 
--- ==================== GUI UPDATE FUNCTION ====================
-
-function updateGUI()
-    statusLabel.Text = "Scanning..."
-    
-    -- Clear previous results
-    for _, child in ipairs(scrollFrame:GetChildren()) do
-        if child:IsA("TextButton") or child:IsA("TextLabel") then
-            child:Destroy()
+local function claimBooth()
+    -- PRIME first
+    for _, num in ipairs(PRIME_BOOTHS) do
+        local booth = workspace.FarmersMarket.Booths:FindFirstChild("Booth" .. num)
+        if booth and booth:FindFirstChild("Claim") and booth.Claim.BrickColor == BrickColor.new("Lime green") then
+            fireclickdetector(booth.Claim.ClickDetector)
+            currentBooth = num
+            return true
         end
+        wait(CLAIM_DELAY)
     end
-    
-    local results = simpleDetection()
-    
-    if #results == 0 then
-        local noResults = Instance.new("TextLabel")
-        noResults.Size = UDim2.new(1, 0, 0, 50)
-        noResults.BackgroundTransparency = 1
-        noResults.TextColor3 = Color3.fromRGB(255, 100, 100)
-        noResults.Text = "No checkpoints found!\nTry moving around the map."
-        noResults.TextSize = 12
-        noResults.TextWrapped = true
-        noResults.Parent = scrollFrame
-        statusLabel.Text = "No checkpoints found"
-        return
+    -- BACKUP
+    for _, num in ipairs(BACKUP_BOOTHS) do
+        local booth = workspace.FarmersMarket.Booths:FindFirstChild("Booth" .. num)
+        if booth and booth:FindFirstChild("Claim") and booth.Claim.BrickColor == BrickColor.new("Lime green") then
+            fireclickdetector(booth.Claim.ClickDetector)
+            currentBooth = num
+            return true
+        end
+        wait(CLAIM_DELAY)
     end
-    
-    -- Add results to GUI
-    for i, detection in ipairs(results) do
-        if i > 15 then break end -- Limit display
-        
-        local confidenceColor
-        if detection.Confidence >= 80 then
-            confidenceColor = Color3.fromRGB(0, 200, 0) -- Green
-        elseif detection.Confidence >= 60 then
-            confidenceColor = Color3.fromRGB(255, 165, 0) -- Orange
+    return false
+end
+
+local function updateRAP()
+    pcall(function()
+        local indexGui = PLAYER.PlayerGui:FindFirstChild("MarketIndex") or PLAYER.PlayerGui:FindFirstChild("Index") or PLAYER.PlayerGui:FindFirstChild("RAP")
+        if indexGui then
+            -- Parse top RAP (adapt paths)
+            local topLabel = indexGui:FindFirstChild("TopRAP", true) or indexGui:FindFirstChild("Price1", true)
+            rapData = topLabel and topLabel.Text or "Parsed from GUI"
         else
-            confidenceColor = Color3.fromRGB(255, 50, 50) -- Red
+            rapData = "No Index GUI found"
         end
-        
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(1, 0, 0, 60)
-        button.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-        button.Text = ""
-        button.Parent = scrollFrame
-        
-        -- Object name
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(1, -10, 0, 20)
-        nameLabel.Position = UDim2.new(0, 5, 0, 5)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        nameLabel.Text = detection.Object.Name
-        nameLabel.TextSize = 11
-        nameLabel.Font = Enum.Font.GothamBold
-        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-        nameLabel.Parent = button
-        
-        -- Type and position
-        local infoLabel = Instance.new("TextLabel")
-        infoLabel.Size = UDim2.new(1, -10, 0, 15)
-        infoLabel.Position = UDim2.new(0, 5, 0, 25)
-        infoLabel.BackgroundTransparency = 1
-        infoLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
-        infoLabel.Text = detection.Type .. " | Y: " .. math.floor(detection.Object.Position.Y)
-        infoLabel.TextSize = 10
-        infoLabel.Font = Enum.Font.Gotham
-        infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-        infoLabel.Parent = button
-        
-        -- Confidence
-        local confLabel = Instance.new("TextLabel")
-        confLabel.Size = UDim2.new(1, -10, 0, 15)
-        confLabel.Position = UDim2.new(0, 5, 0, 40)
-        confLabel.BackgroundTransparency = 1
-        confLabel.TextColor3 = confidenceColor
-        confLabel.Text = "Confidence: " .. math.floor(detection.Confidence) .. "%"
-        confLabel.TextSize = 10
-        confLabel.Font = Enum.Font.Gotham
-        confLabel.TextXAlignment = Enum.TextXAlignment.Left
-        confLabel.Parent = button
-        
-        -- Click to teleport
-        button.MouseButton1Click:Connect(function()
-            if teleportToObject(detection.Object) then
-                statusLabel.Text = "Teleported to: " .. detection.Object.Name
-            else
-                statusLabel.Text = "Teleport failed!"
+    end)
+end
+
+local function autoRelist()  -- Placeholder advanced
+    pcall(function()
+        local boothGui = PLAYER.PlayerGui:FindFirstChild("BoothGUI")
+        if boothGui and #boothGui:GetChildren() < 4 then  -- Dummy check
+            -- Auto open listings, add item (adapt)
+            print("Auto relisting...")
+        end
+    end)
+end
+
+-- Main Loops
+spawn(function()  -- Claim & Travel Loop
+    while wait(2) do
+        pcall(function()
+            if workspace:FindFirstChild("FarmersMarket") then
+                local hasBooth = PLAYER.PlayerGui:FindFirstChild("BoothGUI")
+                if autoClaim and not hasBooth then
+                    claimBooth()
+                elseif autoRelist and hasBooth then
+                    autoRelist()
+                end
+            elseif autoTravel then
+                travelToFarmersMarket()
             end
         end)
     end
-    
-    statusLabel.Text = "Found " .. #results .. " objects"
-    scrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+end)
+
+spawn(function()  -- Hop Loop
+    while wait(1) do
+        if autoHop and tick() >= nextHopTime then
+            hopServer()
+            nextHopTime = tick() + hopInterval
+        end
+    end
+end)
+
+-- Update GUI Stats
+spawn(function()
+    while wait(1) do
+        pcall(function()
+            pingValue = Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+            playerCount = #Players:GetPlayers()
+            statusPing.Text.Text = "Ping: " .. math.floor(pingValue) .. " ms | Players: " .. playerCount
+
+            local tokensGui = PLAYER.PlayerGui:FindFirstChild("TradeTokens") or PLAYER.PlayerGui:FindFirstChild("Tokens")
+            local tokens = tokensGui and tokensGui.Text or "--"
+            statusTokens.Text = "Tokens: " .. tokens
+
+            statusBooth.Text = "Booth: #" .. currentBooth
+            statusNextHop.Text = "Next Hop: " .. math.floor(nextHopTime - tick()) .. "s"
+
+            statusRAP.Text = "RAP: " .. rapData
+        end)
+    end
+end)
+
+-- Anti AFK
+spawn(function()
+    local vu = game:GetService("VirtualUser")
+    while wait(60) do
+        if antiAFK then
+            vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            wait(1)
+            vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end
+    end
+end)
+
+-- PERSIST & RECONNECT
+TeleportService.OnTeleport:Connect(function()
+    wait(1)
+    loadstring(game:HttpGet(SCRIPT_URL))()
+end)
+
+local function teleportBack()
+    wait(3)
+    TeleportService:Teleport(PLACE_ID, PLAYER)
 end
 
--- ==================== CONTROL BUTTONS ====================
+Players.PlayerRemoving:Connect(function(p) if p == PLAYER then teleportBack() end end)
+game:BindToClose(teleportBack)
 
--- Refresh Button
-local refreshButton = Instance.new("TextButton")
-refreshButton.Size = UDim2.new(0.48, 0, 0, 30)
-refreshButton.Position = UDim2.new(0.01, 0, 0.1, 0)
-refreshButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-refreshButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-refreshButton.Text = "🔄 Refresh"
-refreshButton.TextSize = 12
-refreshButton.Font = Enum.Font.GothamBold
-refreshButton.Parent = controlFrame
-
-refreshButton.MouseButton1Click:Connect(updateGUI)
-
--- Summit Button
-local summitButton = Instance.new("TextButton")
-summitButton.Size = UDim2.new(0.48, 0, 0, 30)
-summitButton.Position = UDim2.new(0.51, 0, 0.1, 0)
-summitButton.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
-summitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-summitButton.Text = "🏔️ Summit"
-summitButton.TextSize = 12
-summitButton.Font = Enum.Font.GothamBold
-summitButton.Parent = controlFrame
-
-summitButton.MouseButton1Click:Connect(function()
-    local summit = findSummit()
-    if summit then
-        if teleportToObject(summit) then
-            statusLabel.Text = "Teleported to summit!"
-        else
-            statusLabel.Text = "Summit teleport failed!"
-        end
-    else
-        statusLabel.Text = "No summit found!"
-    end
-end)
-
--- Auto Refresh Toggle
-local autoRefreshButton = Instance.new("TextButton")
-autoRefreshButton.Size = UDim2.new(0.98, 0, 0, 25)
-autoRefreshButton.Position = UDim2.new(0.01, 0, 0.55, 0)
-autoRefreshButton.BackgroundColor3 = autoRefresh and Color3.fromRGB(0, 150, 100) or Color3.fromRGB(80, 80, 80)
-autoRefreshButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-autoRefreshButton.Text = autoRefresh and "🟢 Auto Refresh: ON" : "🔴 Auto Refresh: OFF"
-autoRefreshButton.TextSize = 11
-autoRefreshButton.Font = Enum.Font.Gotham
-autoRefreshButton.Parent = controlFrame
-
-autoRefreshButton.MouseButton1Click:Connect(function()
-    autoRefresh = not autoRefresh
-    autoRefreshButton.BackgroundColor3 = autoRefresh and Color3.fromRGB(0, 150, 100) or Color3.fromRGB(80, 80, 80)
-    autoRefreshButton.Text = autoRefresh and "🟢 Auto Refresh: ON" : "🔴 Auto Refresh: OFF"
-    statusLabel.Text = "Auto Refresh: " .. (autoRefresh and "ON" or "OFF")
-end)
-
--- Close Button
-local closeButton = Instance.new("TextButton")
-closeButton.Size = UDim2.new(0.2, 0, 0, 20)
-closeButton.Position = UDim2.new(0.78, 0, 0, 5)
-closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.Text = "X"
-closeButton.TextSize = 12
-closeButton.Font = Enum.Font.GothamBold
-closeButton.Parent = title
-
-closeButton.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
--- Initial scan
-updateGUI()
-
--- Auto refresh loop
-spawn(function()
-    while true do
-        if autoRefresh and screenGui.Parent then
-            updateGUI()
-        end
-        wait(5) -- Refresh setiap 5 detik
-    end
-end)
-
-print("✅ Checkpoint Finder Loaded Successfully!")
-print("🎯 GUI should be visible on screen")
-print("🏔️ Click Summit button for highest point")
-print("🔧 Auto-refresh every 5 seconds")
+updateRAP()  -- Initial RAP
+print("🚀 BOOTH HUNTER GUI v3.0 NYALA GILA! Ungu Modern | Drag & Toggle Ready 😈")
