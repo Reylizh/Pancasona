@@ -1,5 +1,5 @@
 
---loadstring(game:HttpGet("", true))()
+--loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/testing.lua", true))()
 
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
@@ -10,7 +10,7 @@ local PLAYER = Players.LocalPlayer
 local Stats = game:GetService("Stats")
 
 local PLACE_ID = 126884695634066
-local SCRIPT_URL = "https://pastebin.com/raw/YOUR_PASTE_ID_HERE"  -- GANTI INI!
+local SCRIPT_URL = "https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/testing.lua"
 
 -- ================== CONFIG ==================
 local PRIME_BOOTHS = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}
