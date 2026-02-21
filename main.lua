@@ -32,8 +32,18 @@ If you are unsure, uncomfortable, or unwilling to accept these risks, do not use
 
 You have been clearly warned. Proceed only if you fully understand and accept all potential consequences.]]
 
+--[[
+ Use at your own risk!
+]]
+
+--Loader
+https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/uvuvwevwevweonyetenyevweugwemubwemossas
 
 
+
+--Script
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/uvuvwevwevweonyetenyevweugwemubwemossas
+"))();
 
 
 
