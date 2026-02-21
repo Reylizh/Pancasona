@@ -36,13 +36,15 @@ You have been clearly warned. Proceed only if you fully understand and accept al
  Use at your own risk!
 ]]
 
---Loader
---[[loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/main.lua
-"))();]]
+--[[
+Loader
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/main.lua"))();
+
+]]
 
   --Script
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/uvuvwevwevweonyetenyevweugwemubwemossas
-"))();
+loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/uvuvwevwevweonyetenyevweugwemubwemossas"))();
 
 
 
