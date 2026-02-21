@@ -16,7 +16,7 @@ local jumpConnection = nil
 local jumpingActive = false
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AntiAFKPro"
+screenGui.Name = "AntiAFK"
 screenGui.Parent = playerGui
 screenGui.ResetOnSpawn = false
 
@@ -43,7 +43,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 35)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.Text = "🚀 Anti-AFK PRO by Grok"
+titleLabel.Text = "🚀 Anti-AFK"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.GothamBold
