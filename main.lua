@@ -1,4 +1,4 @@
---{{WARNING – READ BEFORE USING
+--[[WARNING – READ BEFORE USING
 
 This script is provided strictly as-is, with no guarantees, warranties, or promises of safety. It is not meant to be used to cause harm, break rules, exploit systems, abuse features, bypass security, or violate any platform’s Terms of Service. If you choose to use this script for anything that goes against platform rules or community guidelines, that decision is entirely yours.
 
@@ -30,7 +30,9 @@ Any other direct or indirect consequences
 
 If you are unsure, uncomfortable, or unwilling to accept these risks, do not use this script. There are no refunds, no guarantees, and no account recovery support provided by us if something goes wrong.
 
-You have been clearly warned. Proceed only if you fully understand and accept all potential consequences.}}
+You have been clearly warned. Proceed only if you fully understand and accept all potential consequences.]]
+
+
 
 
 
