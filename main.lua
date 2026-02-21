@@ -37,11 +37,10 @@ You have been clearly warned. Proceed only if you fully understand and accept al
 ]]
 
 --Loader
-https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/uvuvwevwevweonyetenyevweugwemubwemossas
+--[[loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/main.lua
+"))();]]
 
-
-
---Script
+  --Script
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Reylizh/Pancasona/refs/heads/main/uvuvwevwevweonyetenyevweugwemubwemossas
 "))();
 
